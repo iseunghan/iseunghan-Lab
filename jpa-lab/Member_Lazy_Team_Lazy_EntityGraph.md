@@ -61,17 +61,20 @@ public class Member {
 각 Repository에 Fetch Join을 추가
 ```java
 public interface MemberRepository extends JpaRepository<Member, Long> {
-    @Query(value = "select m from Member m join fetch m.team")
-    List<Member> findMembersFetchJoin();
+    @EntityGraph(attributePaths = "team")
+    @Query(value = "select m from Member m")
+    List<Member> findMembersEntityGraph();
 }
 ```  
 ```java
 public interface TeamRepository extends JpaRepository<Team, Long> {
-    Optional<Team> findTeamByName(String name);
-    @Query(value = "select t from Team t join fetch t.members where t.name = :name")
-    Optional<Team> findTeamByNameFetchJoin(String name);
-    @Query(value = "select t from Team t join fetch t.members")
-    List<Team> findTeamsFetchJoin();
+    @EntityGraph(attributePaths = "members")
+    @Query(value = "select t from Team t where t.name = :name")
+    Optional<Team> findTeamByNameEntityGraph(String name);
+
+    @EntityGraph(attributePaths = "members")
+    @Query(value = "select t from Team t")
+    List<Team> findTeamsEntityGraph();
 }
 ```
 
@@ -80,12 +83,12 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
 ```java
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-public class Member_Lazy_Team_Lazy_Fetch_Join_Test {
+public class Member_Lazy_Team_Lazy_EntityGraph_Test {
     @Autowired private MemberRepository memberRepository;
     @Autowired private TeamRepository teamRepository;
     @PersistenceContext private EntityManager em;
 
-    // setup, clear, clearPersistenceContext 메소드 동일 
+    // ...
 
     @DisplayName("단일 팀을 조회하고, 멤버를 사용하던 안하던 -> 1개의 쿼리가 나간다.(팀 조회하는 쿼리 1개)")
     @Test
@@ -93,7 +96,7 @@ public class Member_Lazy_Team_Lazy_Fetch_Join_Test {
         clearPersistenceContext();
 
         System.out.println("----------find_One_Team_test start-----------");
-        Team team = teamRepository.findTeamByNameFetchJoin("team1")
+        Team team = teamRepository.findTeamByNameEntityGraph("team1")
                 .orElseThrow(RuntimeException::new);
         assertThat(team.getName()).isEqualTo("team1");
         System.out.println("----------find_One_Team_test end-----------");
@@ -105,7 +108,7 @@ public class Member_Lazy_Team_Lazy_Fetch_Join_Test {
         clearPersistenceContext();
 
         System.out.println("----------team_findAll_test start-----------");
-        List<Team> teamList = teamRepository.findTeamsFetchJoin();
+        List<Team> teamList = teamRepository.findTeamsEntityGraph();
         assertThat(teamList).hasSize(3);
         System.out.println("----------team_findAll_test mid-----------");
         teamList.stream()
@@ -124,7 +127,7 @@ public class Member_Lazy_Team_Lazy_Fetch_Join_Test {
         clearPersistenceContext();
 
         System.out.println("----------member_findAll_test start-----------");
-        List<Member> memberList = memberRepository.findMembersFetchJoin();
+        List<Member> memberList = memberRepository.findMembersEntityGraph();
         assertThat(memberList).hasSize(6);
         System.out.println("----------member_findAll_test mid-----------");
         memberList.stream()
@@ -135,10 +138,11 @@ public class Member_Lazy_Team_Lazy_Fetch_Join_Test {
     }
 }
 
-
 ```
 
 ## Console output
+
+> 실행결과는 FetchJoin 로그 중 inner join에서 left outer join으로 변경된 점 말고는 동일하다.
 
 ### find_One_Team_test()
 **중요 로그:**  
@@ -154,7 +158,7 @@ Hibernate:
         t1_0.name 
     from
         team t1_0 
-    join
+    left join
         member m1_0 
             on t1_0.id=m1_0.team_id 
     where
@@ -176,7 +180,7 @@ Hibernate:
         t1_0.name 
     from
         team t1_0 
-    join
+    left join
         member m1_0 
             on t1_0.id=m1_0.team_id
 ----------team_findAll_test mid-----------
@@ -202,7 +206,7 @@ Hibernate:
         t1_0.name 
     from
         member m1_0 
-    join
+    left join
         team t1_0 
             on t1_0.id=m1_0.team_id
 ----------member_findAll_test mid-----------
