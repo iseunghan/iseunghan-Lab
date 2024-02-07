@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import java.util.List;
 
@@ -91,6 +93,65 @@ public class Member_Lazy_Team_Lazy_Fetch_Join_Test {
         System.out.println("----------team_findAll_test end-----------");
     }
 
+    @DisplayName("모든 팀을 조회할 때, Fetch Join + Pageable은 Limit 쿼리가 안나간다.")
+    @Test
+    void team_findAll_Pagination_test() {
+        clearPersistenceContext();
+
+        System.out.println("----------team_findAll_test start-----------");
+        List<Team> teamList = teamRepository.findTeamsFetchJoin(PageRequest.of(0, 1));
+        assertThat(teamList).hasSize(1);
+        System.out.println("----------team_findAll_test mid-----------");
+        teamList.stream()
+                .map(Team::getMembers)
+                .map(List::stream)
+                .forEach(memberStream -> memberStream
+                        .map(Member::getName)
+                        .forEach(System.out::println)
+                );
+        System.out.println("----------team_findAll_test end-----------");
+    }
+
+    @DisplayName("모든 팀을 조회할 때, 기본제공 findAll + Pageable은 Limit 쿼리가 발생한다.")
+    @Test
+    void team_default_findAll_Pagination_test() {
+        clearPersistenceContext();
+
+        System.out.println("----------team_findAll_test start-----------");
+        Page<Team> result = teamRepository.findAll(PageRequest.of(0, 1));
+        List<Team> teamList = result.getContent();
+        assertThat(teamList).hasSize(1);
+        System.out.println("----------team_findAll_test mid-----------");
+        teamList.stream()
+                .map(Team::getMembers)
+                .map(List::stream)
+                .forEach(memberStream -> memberStream
+                        .map(Member::getName)
+                        .forEach(System.out::println)
+                );
+        System.out.println("----------team_findAll_test end-----------");
+    }
+
+    @DisplayName("모든 팀을 조회할 때, Fetch Join 제거 + Pageable은 Limit 쿼리가 발생한다.")
+    @Test
+    void team_findAll_Exclusive_FetchJoin_with_Pagination_test() {
+        clearPersistenceContext();
+
+        System.out.println("----------team_findAll_test start-----------");
+        Page<Team> result = teamRepository.findTeamsWithoutFetchJoin(PageRequest.of(0, 1));
+        List<Team> teamList = result.getContent();
+        assertThat(teamList).hasSize(1);
+        System.out.println("----------team_findAll_test mid-----------");
+        teamList.stream()
+                .map(Team::getMembers)
+                .map(List::stream)
+                .forEach(memberStream -> memberStream
+                        .map(Member::getName)
+                        .forEach(System.out::println)
+                );
+        System.out.println("----------team_findAll_test end-----------");
+    }
+
     @DisplayName("모든 멤버를 조회하고, 지연로딩 된 팀을 사용할 때 -> 단 1개의 쿼리만 나간다")
     @Test
     void member_findAll_test() {
@@ -99,6 +160,22 @@ public class Member_Lazy_Team_Lazy_Fetch_Join_Test {
         System.out.println("----------member_findAll_test start-----------");
         List<Member> memberList = memberRepository.findMembersFetchJoin();
         assertThat(memberList).hasSize(6);
+        System.out.println("----------member_findAll_test mid-----------");
+        memberList.stream()
+                .map(Member::getTeam)
+                .map(Team::getName)
+                .forEach(System.out::println);
+        System.out.println("----------member_findAll_test end-----------");
+    }
+
+    @DisplayName("~ToOne관계에서는 페이징처리가 가능하다")
+    @Test
+    void member_findAll_Pagination_test() {
+        clearPersistenceContext();
+
+        System.out.println("----------member_findAll_test start-----------");
+        List<Member> memberList = memberRepository.findMembersFetchJoin(PageRequest.of(0, 3));
+        assertThat(memberList).hasSize(3);
         System.out.println("----------member_findAll_test mid-----------");
         memberList.stream()
                 .map(Member::getTeam)

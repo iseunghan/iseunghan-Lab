@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.data.domain.PageRequest;
 
 import java.util.List;
 
@@ -80,6 +81,25 @@ public class Member_Lazy_Team_Lazy_EntityGraph_Test {
         System.out.println("----------team_findAll_test start-----------");
         List<Team> teamList = teamRepository.findTeamsEntityGraph();
         assertThat(teamList).hasSize(3);
+        System.out.println("----------team_findAll_test mid-----------");
+        teamList.stream()
+                .map(Team::getMembers)
+                .map(List::stream)
+                .forEach(memberStream -> memberStream
+                        .map(Member::getName)
+                        .forEach(System.out::println)
+                );
+        System.out.println("----------team_findAll_test end-----------");
+    }
+
+    @DisplayName("모든 팀을 조회할 때, EntityGraph + Pageable은 Limit 쿼리가 안나간다.")
+    @Test
+    void team_findAll_Pagination_test() {
+        clearPersistenceContext();
+
+        System.out.println("----------team_findAll_test start-----------");
+        List<Team> teamList = teamRepository.findTeamsEntityGraph(PageRequest.of(0, 1));
+        assertThat(teamList).hasSize(1);
         System.out.println("----------team_findAll_test mid-----------");
         teamList.stream()
                 .map(Team::getMembers)
