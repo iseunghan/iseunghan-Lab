@@ -18,6 +18,7 @@ public class Team {
     private Long id;
     private String name;
 
+    @BatchSize(size = 10)
     @OneToMany(mappedBy = "team", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<Member> members = new ArrayList<>();
 
