@@ -19,6 +19,9 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
     @Query(value = "select t from Team t join fetch t.members")
     List<Team> findTeamsFetchJoin();
 
+    @Query(value = "select t from Team t join fetch t.members join fetch t.sponsors")
+    List<Team> findTeamsFetchJoinTwoCollection();
+
     @Query(
             value = "select t from Team t join fetch t.members",
             countQuery = "select count(t) from Team t"

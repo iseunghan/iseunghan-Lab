@@ -18,9 +18,12 @@ public class Team {
     private Long id;
     private String name;
 
-    @BatchSize(size = 10)
+//    @BatchSize(size = 10)
     @OneToMany(mappedBy = "team", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<Member> members = new ArrayList<>();
+
+    @OneToMany(mappedBy = "team", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<Sponsor> sponsors = new ArrayList<>();
 
     @Builder
     private Team(String name) {
@@ -30,5 +33,10 @@ public class Team {
     public void addMember(Member member) {
         this.members.add(member);
         member.updateTeam(this);
+    }
+
+    public void addSponsor(Sponsor sponsor) {
+        this.sponsors.add(sponsor);
+        sponsor.updateTeam(this);
     }
 }

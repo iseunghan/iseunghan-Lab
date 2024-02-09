@@ -132,24 +132,24 @@ public class Member_Lazy_Team_Lazy_Fetch_Join_Test {
         System.out.println("----------team_findAll_test end-----------");
     }
 
-    @DisplayName("모든 팀을 조회할 때, 기본제공 findAll + BatchSize로 N+1을 해결할 수 있다")
-    @Test
-    void team_default_findAll_BatchSize_N1_test() {
-        clearPersistenceContext();
-
-        System.out.println("----------team_findAll_test start-----------");
-        List<Team> teamList = teamRepository.findAll();
-        assertThat(teamList).hasSize(3);
-        System.out.println("----------team_findAll_test mid-----------");
-        teamList.stream()
-                .map(Team::getMembers)
-                .map(List::stream)
-                .forEach(memberStream -> memberStream
-                        .map(Member::getName)
-                        .forEach(System.out::println)
-                );
-        System.out.println("----------team_findAll_test end-----------");
-    }
+//    @DisplayName("모든 팀을 조회할 때, 기본제공 findAll + BatchSize로 N+1을 해결할 수 있다")
+//    @Test
+//    void team_default_findAll_BatchSize_N1_test() {
+//        clearPersistenceContext();
+//
+//        System.out.println("----------team_findAll_test start-----------");
+//        List<Team> teamList = teamRepository.findAll();
+//        assertThat(teamList).hasSize(3);
+//        System.out.println("----------team_findAll_test mid-----------");
+//        teamList.stream()
+//                .map(Team::getMembers)
+//                .map(List::stream)
+//                .forEach(memberStream -> memberStream
+//                        .map(Member::getName)
+//                        .forEach(System.out::println)
+//                );
+//        System.out.println("----------team_findAll_test end-----------");
+//    }
 
     @DisplayName("모든 팀을 조회할 때, Fetch Join 제거 + Pageable은 Limit 쿼리가 발생한다.")
     @Test
