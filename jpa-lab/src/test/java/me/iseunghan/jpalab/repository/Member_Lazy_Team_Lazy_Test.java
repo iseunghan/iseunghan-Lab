@@ -13,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -83,7 +84,7 @@ public class Member_Lazy_Team_Lazy_Test {
         System.out.println("----------team_findAll_test mid-----------");
         teamList.stream()
                 .map(Team::getMembers)
-                .map(List::stream)
+                .map(Set::stream)
                 .forEach(memberStream -> memberStream
                         .map(Member::getName)
                         .forEach(System.out::println)

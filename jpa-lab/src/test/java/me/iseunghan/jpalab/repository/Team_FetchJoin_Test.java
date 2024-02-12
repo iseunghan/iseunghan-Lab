@@ -12,7 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,16 +43,16 @@ public class Team_FetchJoin_Test {
         Team team2 = Team.builder().name("team2").build();
         team2.addMember(Member.builder().name("member2-1").build());
         team2.addMember(Member.builder().name("member2-2").build());
-        team1.addSponsor(sponsor21);
-        team1.addSponsor(sponsor22);
+//        team2.addSponsor(sponsor21);
+//        team2.addSponsor(sponsor22);
 
         Sponsor sponsor31 = Sponsor.builder().name("sponsor31").build();
         Sponsor sponsor32 = Sponsor.builder().name("sponsor32").build();
         Team team3 = Team.builder().name("team3").build();
         team3.addMember(Member.builder().name("member3-1").build());
         team3.addMember(Member.builder().name("member3-2").build());
-        team1.addSponsor(sponsor31);
-        team1.addSponsor(sponsor32);
+        team3.addSponsor(sponsor31);
+        team3.addSponsor(sponsor32);
 
         teamRepository.save(team1);
         teamRepository.save(team2);
@@ -80,12 +81,13 @@ public class Team_FetchJoin_Test {
     void Over_Two_collection_fetchJoin_Not_Allowed() throws Exception {
         System.out.println("--------Over_Two_collection_fetchJoin_Not_Allowed START-------------");
         // when
-        List<Team> teams = teamRepository.findTeamsFetchJoinTwoCollection();
+        List<Team> teams = teamRepository.findTeamsFetchJoinTwoCollection(PageRequest.of(0, 3)).getContent();
         assertThat(teams).hasSize(3);
 
         // then
         System.out.println("--------Over_Two_collection_fetchJoin_Not_Allowed MID-------------");
         teams.forEach(team -> {
+            System.out.println(team.getName());
             team.getMembers().stream().map(Member::getName).forEach(System.out::println);
             team.getSponsors().stream().map(Sponsor::getName).forEach(System.out::println);
         });
