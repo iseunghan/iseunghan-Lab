@@ -86,7 +86,7 @@ public class Member_Eager_Team_Lazy_Test {
         System.out.println("----------team_findAll_test mid-----------");
         teamList.stream()
                 .map(Team::getMembers)
-                .map(Set::stream)
+                .map(List::stream)
                 .forEach(memberStream -> memberStream
                         .map(Member::getName)
                         .forEach(System.out::println)

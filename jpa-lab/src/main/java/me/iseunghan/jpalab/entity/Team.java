@@ -5,12 +5,9 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.BatchSize;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -22,10 +19,10 @@ public class Team {
 
 //    @BatchSize(size = 10)
     @OneToMany(mappedBy = "team", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    private Set<Member> members = new LinkedHashSet<>();
+    private List<Member> members = new ArrayList<>();
 
     @OneToMany(mappedBy = "team", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
-    private Set<Sponsor> sponsors = new LinkedHashSet<>();
+    private List<Sponsor> sponsors = new ArrayList<>();
 
     @Builder
     private Team(String name) {
