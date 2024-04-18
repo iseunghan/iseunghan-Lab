@@ -127,4 +127,23 @@ public class Member_Lazy_Team_Lazy_EntityGraph_Test {
                 .forEach(System.out::println);
         System.out.println("----------member_findAll_test end-----------");
     }
+
+    @DisplayName("EntityGraph를 이용해 모든 팀을 조회할 때, LIMIT 쿼리를 사용할 수 없다.")
+    @Test
+    void team_findAll__EntityGraph_Limit_test() {
+        clearPersistenceContext();
+
+        System.out.println("----------team_findAll_test start-----------");
+        List<Team> teamList = teamRepository.findTeamsEntityGraph(PageRequest.of(0, 1));
+        assertThat(teamList).hasSize(1);
+        System.out.println("----------team_findAll_test mid-----------");
+        teamList.stream()
+                .map(Team::getMembers)
+                .map(List::stream)
+                .forEach(memberStream -> memberStream
+                        .map(Member::getName)
+                        .forEach(System.out::println)
+                );
+        System.out.println("----------team_findAll_test end-----------");
+    }
 }

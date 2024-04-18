@@ -219,3 +219,64 @@ team3
 ----------member_findAll_test end-----------
 ```
 
+### Limit 쿼리
+EntityGraph는 Limit 쿼리가 먹히지 않는다.
+
+TeamRepository:
+```java
+@EntityGraph(attributePaths = "members")
+@Query(value = "select t from Team t")
+List<Team> findTeamsEntityGraph(Pageable pageable);
+```
+  
+테스트 코드:
+```java
+@DisplayName("EntityGraph를 이용해 모든 팀을 조회할 때, LIMIT 쿼리를 사용할 수 없다.")
+@Test
+void team_findAll__EntityGraph_Limit_test() {
+    clearPersistenceContext();
+
+    System.out.println("----------team_findAll_test start-----------");
+    List<Team> teamList = teamRepository.findTeamsEntityGraph(PageRequest.of(0, 1));
+    assertThat(teamList).hasSize(1);
+    System.out.println("----------team_findAll_test mid-----------");
+    teamList.stream()
+        .map(Team::getMembers)
+        .map(List::stream)
+        .forEach(memberStream -> memberStream
+        .map(Member::getName)
+        .forEach(System.out::println));
+    System.out.println("----------team_findAll_test end-----------");
+}
+```
+
+실행결과:
+```console
+2024-02-26T21:16:47.077+09:00  WARN 33635 --- [    Test worker] org.hibernate.orm.query                  : HHH90003004: firstResult/maxResults specified with collection fetch; applying in memory
+Hibernate: 
+    select
+        t1_0.id,
+        m1_0.team_id,
+        m1_0.id,
+        m1_0.name,
+        t1_0.name 
+    from
+        team t1_0 
+    left join
+        member m1_0 
+            on t1_0.id=m1_0.team_id
+----------team_findAll_test mid-----------
+member1-1
+member1-2
+----------team_findAll_test end-----------
+```
+
+위 로그를 보면, `firstResult/maxResults specified with collection fetch; applying in memory` 라고 뜬다.
+이 말은 즉슨, LIMIT 쿼리를 적용시키지 못했으며 모든 row를 조회해서 메모리 상에 올려두고 pagination을 했다는 뜻이다.
+만약 1만개, 몇백만개의 row가 메모리에 올라간다면? OutOfMemoryException이 발생하고 서버는 죽을 것이다.
+
+이런 점을 막기 위해 다음과 같이 해결할 수 있다.
+1. BatchSize를 사용
+``
+
+~ToOne 관계에서는 LIMIT가 잘 적용됩니다.
