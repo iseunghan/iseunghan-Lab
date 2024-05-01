@@ -1,4 +1,4 @@
-package item32;
+package me.iseunghan.item32;
 
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
