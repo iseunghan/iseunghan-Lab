@@ -1,0 +1,10 @@
+my:
+  service:
+    enabled: false
+    remote-address: 192.168.1.1
+    security:
+      username: "uname1"
+      password: "pass1"
+      roles:
+        - "USER"
+        - "ADMIN"
