@@ -3,11 +3,15 @@ package book.ch7.sub8;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+
 public class BookSolution {
     @Test
     void test() {
-        int result = trap1(new int[]{0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1});
-        Assertions.assertEquals(result, 6);
+        int[] heights = {0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1};
+        Assertions.assertEquals(trap1(heights), 6);
+        Assertions.assertEquals(trap2(heights), 6);
     }
 
     /**
@@ -35,5 +39,29 @@ public class BookSolution {
             }
         }
         return result;
+    }
+
+    /**
+     * 도저히 이해할 수가 없는 풀이다.. 이런 풀이를 어떻게 생각하시는건지...
+     */
+    public int trap2(int[] height) {
+        Deque<Integer> stack = new ArrayDeque<>();
+        int volume = 0;
+
+        for (int i = 0; i < height.length; i++) {
+            // 변곡점을 만나는 경우
+            while (!stack.isEmpty() && height[i] > height[stack.peek()]) {
+                Integer top = stack.pop();
+
+                if (stack.isEmpty()) break;
+
+                int distance = i - stack.peek() - 1;
+                int waters = Math.min(height[i], height[stack.peek()]) - height[top];
+
+                volume += distance * waters;
+            }
+            stack.push(i);
+        }
+        return volume;
     }
 }
