@@ -1,1 +1,6 @@
-spring.application.name=spring-zip-unzip-handling
+spring:
+  servlet:
+    multipart:
+      file-size-threshold: 1MB
+      max-file-size: 500MB
+      max-request-size: 1GB

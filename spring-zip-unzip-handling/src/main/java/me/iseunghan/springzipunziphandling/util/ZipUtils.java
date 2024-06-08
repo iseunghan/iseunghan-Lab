@@ -60,7 +60,11 @@ public class ZipUtils {
         unZipFile(dstPath, new FileInputStream(zipFile), null);
     }
 
-    public static void unZipFile(String dstPath, InputStream inputStream, @Nullable Function<Path, Path> renameDuplicatedFilename) throws IOException {
+    public static void unZipFile(String dstPath, InputStream inputStream) throws IOException {
+        unZipFile(dstPath, inputStream, null);
+    }
+
+    private static void unZipFile(String dstPath, InputStream inputStream, @Nullable Function<Path, Path> renameDuplicatedFilename) throws IOException {
         try (ZipInputStream zipInputStream = new ZipInputStream(inputStream, Charset.forName("EUC-KR"))) {
             ZipEntry entry;
             byte[] buffer = new byte[DEFAULT_BUFFER_SIZE];
