@@ -1,0 +1,74 @@
+{
+	"info": {
+		"_postman_id": "fbb3aadd-947c-45ea-b14d-93bb9ad90518",
+		"name": "spring/zip-unzip",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "19656489"
+	},
+	"item": [
+		{
+			"name": "zip-download",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/api/v1/file-zipping-and-download?folderName=spring-zip-unzip-handling/src/test/resources/test-dir",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"file-zipping-and-download"
+					],
+					"query": [
+						{
+							"key": "folderName",
+							"value": "spring-zip-unzip-handling/src/test/resources/test-dir"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "zip-upload",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "postman-cloud:///1ef2ed05-aff9-47f0-87a1-9b25fe3e5712"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/v1/zip-upload?dstPath=spring-zip-unzip-handling/src/test/resources/output-path",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"zip-upload"
+					],
+					"query": [
+						{
+							"key": "dstPath",
+							"value": "spring-zip-unzip-handling/src/test/resources/output-path"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
