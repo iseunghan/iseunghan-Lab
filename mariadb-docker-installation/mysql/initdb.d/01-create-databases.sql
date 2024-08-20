@@ -1,0 +1,3 @@
+# create databases
+CREATE DATABASE IF NOT EXISTS `test-db1`;
+CREATE DATABASE IF NOT EXISTS `test-db2`;
