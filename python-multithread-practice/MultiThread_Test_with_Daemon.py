@@ -18,9 +18,11 @@ print("main thread start")
 threads = []
 for i in range(5):
     t = Worker(f"thread {i}")       # sub thread 생성
-    t.daemon = True
     t.start()                       # sub thread의 run 메서드를 호출
     threads.append(t)
+
+for th in threads:
+    th.join()
 
 print("main thread end")
 
@@ -31,4 +33,9 @@ print("main thread end")
 # sub thread start thread 2
 # sub thread start thread 3
 # sub thread start thread 4
+# sub thread end thread 3
+# sub thread end thread 1
+# sub thread end thread 0
+# sub thread end thread 2
+# sub thread end thread 4
 # main thread end
