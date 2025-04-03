@@ -8,7 +8,7 @@ import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.test.context.EmbeddedKafka
 import kotlin.test.Test
 
-@EmbeddedKafka(partitions = 1, topics = ["\${spring.kafka.template.default-topic}", "topic1"])
+@EmbeddedKafka(partitions = 1, topics = ["\${spring.kafka.template.default-topic}", "topic1"], brokerProperties = ["listeners=PLAINTEXT://localhost:0", "port=0"])
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class KafkaTest2(
     @Autowired val kafkaTemplate: KafkaTemplate<String, String>,
