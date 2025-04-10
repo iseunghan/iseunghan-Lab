@@ -1,0 +1,29 @@
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin123
+      - DOCKER_INFLUXDB_INIT_ORG=iseunghan-org
+      - DOCKER_INFLUXDB_INIT_BUCKET=iseunghan-test-bucket
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-secret-auth-token
+
+  data-loader:
+    image: influxdb:2.7
+    depends_on:
+      - influxdb
+    volumes:
+      - ./flux-query.txt:/data/flux-query.txt
+    entrypoint: >
+      /bin/sh -c "
+        tail -f /dev/nullc
+        echo '📦 데이터 주입 대기 중...';
+        sleep 5s;
+        influx config create -u http://influxdb:8086 -n my-config2 -p admin:admin123 -org iseunghan-org -a;
+        influx query --host http://influxdb:8086 --org iseunghan-org --file /data/flux-query.txt
+        echo '✅ 데이터 주입 완료!';
+      "

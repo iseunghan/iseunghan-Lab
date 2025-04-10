@@ -1,0 +1,4 @@
+import "influxdata/influxdb/sample"
+
+sample.data(set: "noaaWater")
+|> to(bucket: "iseunghan-test-bucket")
