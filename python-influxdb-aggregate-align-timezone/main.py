@@ -1,4 +1,6 @@
+import datetime
 import warnings
+from datetime import timedelta
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -8,6 +10,7 @@ from influxdb_client import InfluxDBClient
 
 warnings.filterwarnings("ignore")
 
+pd.set_option('display.max_columns', None)
 client = InfluxDBClient(url="http://localhost:8086",
                         token="wjUebuzyHu58N1c_9O-vAA-8SLN8OzdUH_i1J-vICHz1tHRHiSCSKSsF6aiKH7CQIdSLEX8AVl1qXg9IlnrIJw==",
                         org="iseunghan-org", timeout=30_000)
@@ -31,6 +34,22 @@ def aggregate_with_flux_query_timeSrc():
     display(df.tail())
 
 
-print("\n[        aggregate_with_flux_query         ]")
+def aggregate_with_flux_range_timeshift():
+    start_dt = datetime.datetime(2019, 8, 17, 0, 0, 0, tzinfo=datetime.timezone(timedelta(hours=9)))
+    stop_dt = datetime.datetime(2019, 9, 17, 22, 0, 0, tzinfo=datetime.timezone(timedelta(hours=9)))
+
+    df = client.query_api().query_data_frame(f'''
+        from(bucket: "iseunghan-test-bucket")
+          |> range(start: {start_dt.isoformat()}, stop: {stop_dt.isoformat()})
+          |> filter(fn: (r) => r["_measurement"] == "average_temperature")
+          |> filter(fn: (r) => r["location"] == "santa_monica")
+          |> filter(fn: (r) => r["_field"] == "degrees")
+          |> aggregateWindow(every: 1d, fn: mean, timeSrc: "_start")
+        ''')
+    df = df.drop(columns=["result", "table", "_measurement", "location", "_field"], errors="ignore")
+    display(df.head())
+
+
 aggregate_with_flux_query_timeSrc()
+aggregate_with_flux_range_timeshift()
 client.close()
