@@ -146,4 +146,52 @@ def aggregate_with_flux_range_timeshift():
 4 2019-08-16 15:00:00+00:00 2019-09-17 13:00:00+00:00  2019-08-20 00:00:00+00:00  80.137500
 ...
 ```
-그럼 우리가 원하는 15시 기준으로 집계가 되게하려면 어떻게 해야할까요?
+그럼 우리가 원하는 15시 기준으로 집계가 되게하려면 어떻게 해야할까요?  
+
+## LocalTime에 맞게 aggregate를 할 수 있는 방법
+클라이언트 LocalTime에 맞게 서버에서 올바른 응답을 줄 수 있도록 하는 방법 두가지를 소개하겠습니다.
+
+### 1) aggregateWindow(?offset: duration)을 활용한 방법
+offset 옵션에 대해서 공식문서에서 가져와봤습니다.   
+> offset: Duration to shift the window boundaries by. Default is 0s. offset can be negative, indicating that the offset goes backwards in time.
+
+offset은 윈도우의 경계를 지정된 시간만큼 이동시키는데 사용되며, 음수 값을 사용하면 윈도우를 과거로 이동시킬 수 있습니다.
+우리의 목표는 UTC 00시가 아닌 전날 15시 기준으로 집계를 내야하며 즉, -9시간을 파라미터로 넘겨주면 되는 것입니다!
+![](./images/utc-kst-range-diff.png)
+그럼 위 그림과 동일하게 window를 KST 00시 기준으로 옮길 수 있는 것이죠!  
+아래 실습 코드로 바로 확인해봅시다!  
+
+```python
+def aggregate_with_flux_offset():
+    df = client.query_api().query_data_frame(f'''
+        from(bucket: "iseunghan-test-bucket")
+          |> range(start: 2019-08-17T00:00:00+09:00, stop: 2019-09-17T22:00:00+09:00)
+          |> filter(fn: (r) => r["_measurement"] == "average_temperature")
+          |> filter(fn: (r) => r["location"] == "santa_monica")
+          |> filter(fn: (r) => r["_field"] == "degrees")
+          |> aggregateWindow(every: 1d, fn: mean, timeSrc: "_start", offset: -9h)
+        ''')
+    df = df.drop(columns=["result", "table", "_measurement", "location", "_field"], errors="ignore")
+    df["_time_kst"] = pd.to_datetime(df["_time"]).dt.tz_convert("Asia/Seoul")
+    display(df.head())
+```
+여기서 range의 `+09:00` 타임존과 `offset: -9h`로 인해 중복으로 -18시간 처리되어 조회되는게 아닌지 궁금해 하실 수 있는데 range는 조회되는 데이터의 범위를 지정해주는 것이고, offset은 집계를 낼 때 window의 위치를 옮기는 것뿐이라 이는 서로 다른 역할을 합니다. (KST 17일 00시는 16일 15시이므로 range를 전날 15시부터 잡는 것입니다!)
+
+실행결과:
+```text
+                     _start                       _stop                      _time                  _time_kst    _value
+0 2019-08-16 15:00:00+00:00   2019-09-17 13:00:00+00:00  2019-08-16 15:00:00+00:00  2019-08-17 00:00:00+09:00 79.566667
+1 2019-08-16 15:00:00+00:00   2019-09-17 13:00:00+00:00  2019-08-17 15:00:00+00:00  2019-08-18 00:00:00+09:00 80.216667
+2 2019-08-16 15:00:00+00:00   2019-09-17 13:00:00+00:00  2019-08-18 15:00:00+00:00  2019-08-19 00:00:00+09:00 79.841667
+3 2019-08-16 15:00:00+00:00   2019-09-17 13:00:00+00:00  2019-08-19 15:00:00+00:00  2019-08-20 00:00:00+09:00 79.875000
+4 2019-08-16 15:00:00+00:00   2019-09-17 13:00:00+00:00  2019-08-20 15:00:00+00:00  2019-08-21 00:00:00+09:00 79.941667
+... 
+```
+`_time`과 `_time_kst`를 살펴보시면, 드디어 원하던 KST 기준으로 집계가 정상적으로 이뤄졌습니다..!
+
+
+
+# REFERENCES
+- [influxdb flux docs](https://docs.influxdata.com/flux/v0/)
+- [influxdb aggregatewindow offset](https://docs.influxdata.com/flux/v0/stdlib/universe/aggregatewindow/#offset)
+- [influxdb timezone location](https://docs.influxdata.com/flux/v0/stdlib/timezone/location/)

@@ -50,6 +50,21 @@ def aggregate_with_flux_range_timeshift():
     display(df.head())
 
 
+def aggregate_with_flux_offset():
+    df = client.query_api().query_data_frame(f'''
+        from(bucket: "iseunghan-test-bucket")
+          |> range(start: 2019-08-17T00:00:00+09:00, stop: 2019-09-17T22:00:00+09:00)
+          |> filter(fn: (r) => r["_measurement"] == "average_temperature")
+          |> filter(fn: (r) => r["location"] == "santa_monica")
+          |> filter(fn: (r) => r["_field"] == "degrees")
+          |> aggregateWindow(every: 1d, fn: mean, timeSrc: "_start", offset: -9h)
+        ''')
+    df = df.drop(columns=["result", "table", "_measurement", "location", "_field"], errors="ignore")
+    df["_time_kst"] = pd.to_datetime(df["_time"]).dt.tz_convert("Asia/Seoul")
+    display(df.head())
+
+
 aggregate_with_flux_query_timeSrc()
 aggregate_with_flux_range_timeshift()
+aggregate_with_flux_offset()
 client.close()
