@@ -189,6 +189,47 @@ def aggregate_with_flux_offset():
 ```
 `_time`과 `_time_kst`를 살펴보시면, 드디어 원하던 KST 기준으로 집계가 정상적으로 이뤄졌습니다..!
 
+### 2) timezone.location을 활용한 방법
+`offset` 말고 또 다른 방법이 하나 더 있습니다. 바로 timezone 기능을 활용하는 것인데요. 먼저 timezone은 현재 타임존을 설정할 수 있는 편리한 flux 내장 함수라고 생각하시면 됩니다.
+사용 방법은 간단하게 timezone을 import한 뒤 fixed() 또는 location()를 사용하면 됩니다.
+```python
+import "timezone"
+
+timezone.fixed(offset: -8h)// Returns {offset: -8h, zone: "UTC"}
+timezone.location(name: "America/Los_Angeles")// Returns {offset: 0ns, zone: "America/Los_Angeles"}
+```
+
+자 이제 실습코드를 통해 offset 결과와 동일한지 살펴봅시다!
+기존 코드와 달라진 부분은 timezone 모듈을 임포트한 다음 현재 location을 Asia/Seoul로 지정해준 것입니다. 추가로 aggregatewindow의 offset은 제거해줍니다.
+```python
+def aggregate_with_location():
+    df = client.query_api().query_data_frame(f'''
+            import "timezone"
+            option location = timezone.location(name: "Asia/Seoul")
+            ...
+              |> aggregateWindow(every: 1d, fn: mean, timeSrc: "_start")
+            ''')
+    ...
+```
+
+실행결과:
+```text
+                     _start                      _stop                      _time                 _time_kst    _value
+0 2019-08-16 15:00:00+00:00  2019-09-17 13:00:00+00:00  2019-08-16 15:00:00+00:00 2019-08-17 00:00:00+09:00 79.566667 
+1 2019-08-16 15:00:00+00:00  2019-09-17 13:00:00+00:00  2019-08-17 15:00:00+00:00 2019-08-18 00:00:00+09:00 80.216667 
+2 2019-08-16 15:00:00+00:00  2019-09-17 13:00:00+00:00  2019-08-18 15:00:00+00:00 2019-08-19 00:00:00+09:00 79.841667 
+3 2019-08-16 15:00:00+00:00  2019-09-17 13:00:00+00:00  2019-08-19 15:00:00+00:00 2019-08-20 00:00:00+09:00 79.875000 
+4 2019-08-16 15:00:00+00:00  2019-09-17 13:00:00+00:00  2019-08-20 15:00:00+00:00 2019-08-21 00:00:00+09:00 79.941667 
+...          
+```
+실행결과를 `1) aggregateWindow(?offset: duration)을 활용한 방법`의 실행결과와 비교해보면 동일한 것을 확인할 수 있습니다.
+
+## 마치며..
+처음에는 influxdb에 저장된 데이터는 모두 UTC로 저장된다는 사실이 어색하게 느껴져서 시간대를 맞추려 정말 많이 삽질했습니다. 이번에 influxdb에 저장된 시계열 데이터들을 가지고 여러 집계 API를 구현해야 했는데 실제 데이터(KST)와 쿼리로 조회한 집계 데이터가 불일치하는 것 같다는 의심에서부터 여기까지 오게되었습니다.
+
+이번 삽질 덕분에 앞으로 aggregateWindow를 활용하여 집계를 낼 때는 더는 실수하지 않고 정확한 집계를 낼 수 있을 것 같습니다. 추가로 서비스가 점점 확장되어 글로벌 서비스를 하게 되더라도 timezone 변수만 동적으로 바꿔준다면 클라이언트의 localTime에 맞는 정확한 집계 데이터를 제공할 수 있을 것 같습니다.
+
+긴 글 읽어주셔서 감사합니다.
 
 
 # REFERENCES
