@@ -5,6 +5,8 @@
 
 
 # Coroutine이란 무엇인가?
+환경
+- python 3.10.14
 
 다음은 간단한 코루틴 예제가 있습니다. 실행 결과는 어떻게 될까요?
 ```python
@@ -194,6 +196,72 @@ code 객체에도 여러 가지 함수가 있지만 중점적으로 살펴볼 �
 - co_code
 
 하나씩 차근차근 살펴보도록 하겠습니다.
+
+
+`co_code`  
+```python
+print(func.__code__.co_code)
+>> b'd\x01}\x00d\x02}\x01t\x00|\x00|\x01\x17\x00\x83\x01\x01\x00t\x01\xa0\x02\xa1\x00a\x03d\x00S\x00'
+```
+co_code를 출력해보니 바이트열이 담겨있습니다. 이걸 list로 변환해서 출력해보면?
+```python
+print(list(func.__code__.co_code))
+>> [100, 1, 125, 0, 100, 2, 125, 1, 116, 0, 124, 0, 124, 1, 23, 0, 131, 1, 1, 0, 116, 1, 160, 2, 161, 0, 97, 3, 100, 0, 83, 0]
+```
+알 수 없는 숫자열이 담겨있습니다. 바로 op_code와 op_arg를 나타냅니다. dis 모듈을 이용해서 func를 바이트 코드로 변환하여 비교해볼까요?
+![alt text](./images/byte_op_name_op_arg.png)
+
+co_code의 숫자값들이 정말 `[op_code, op_arg, ...]`를 나타내는지 확인해보겠습니다.
+```python
+import opcode
+
+opcode.opname[100]
+>> LOAD_CONST
+
+opcode.opname[125]
+>> STORE_FAST
+```
+dis 모듈로 확인한 바이트 코드의 op_name과 동일한 것을 확인할 수 있습니다.   
+
+정리해보자면, co_code는 op_code와 op_arg를 순서대로 나열시킨 바이트열이라고 할 수 있습니다.
+
+
+`co_consts`
+함수 내부에서 사용중인 상수들을 나타냅니다.
+```python
+print(func.__code__.co_consts)
+>> (None, 10, 20)
+```
+여기서 None은 함수의 기본 반환 값으로 기존 반환 값 여부 상관없이 항상 None 고정입니다.
+
+만일 co_consts에는 함수의 리턴값 또는 매개변수에 대한 정보는 포함되지 않습니다.
+```python
+# frame_f_code_example.py
+print(f"func.co_consts: {func.__code__.co_consts}")
+# >> func.co_consts: (None, 10, 20)
+
+def func2(arg2="world") -> str:
+    return f"Hello, {arg2}"
+
+print(f"func2.co_consts: {func2.__code__.co_consts}")
+# >> func2.co_consts: (None, 'Hello, ')
+```
+
+`co_varnames`
+```python
+# frame_f_code_example.py
+func.__code__.co_varnames
+# >> ('x', 'y')
+```
+함수 내의 지역변수명을 튜플 형태로 저장합니다.
+
+`co_names`
+```python
+func.__code__.co_names
+# >> ('print', 'inspect', 'currentframe', 'frame')
+```
+함수 내의 전역변수명을 튜플의 형태로 저장합니다.
+print, inspect 등의 함수들은 built-in 함수라서 전역변수 취급 되었습니다. 
 
 
 
