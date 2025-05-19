@@ -263,7 +263,62 @@ func.__code__.co_names
 함수 내의 전역변수명을 튜플의 형태로 저장합니다.
 print, inspect 등의 함수들은 built-in 함수라서 전역변수 취급 되었습니다. 
 
+## byte 코드, frame을 함께 살펴봅시다.
+자 바이트 코드가 어떻게 동작하는지 지금부터 Step-by-Step으로 살펴보겠습니다. 
+~~(저도 이해가 잘 가지 않아서 직접 그려가면서 따라가보았습니다.)~~
 
+바이트 코드는 다음과 같이 예제 코드를 살펴보겠습니다.
+```python
+# byte_code_with_frame_ex.py
+def func():
+    x = 10
+    y = 20
+    print(x + y)
+
+import dis
+dis.dis(func)
+```
+
+실행결과:
+```text
+2           0 LOAD_CONST               1 (10)
+            2 STORE_FAST               0 (x)
+
+3           4 LOAD_CONST               2 (20)
+            6 STORE_FAST               1 (y)
+
+4           8 LOAD_GLOBAL              0 (print)
+            10 LOAD_FAST                0 (x)
+            12 LOAD_FAST                1 (y)
+            14 BINARY_ADD
+            16 CALL_FUNCTION            1
+            18 POP_TOP
+            20 LOAD_CONST               0 (None)
+            22 RETURN_VALUE
+```
+
+1. 먼저 LOAD_CONST입니다. op_arg(1)는 LOAD_CONST를 보시면 co_const를 가리킨다는 것을 쉽게 이해하실 수 있습니다. 인덱스 1의 value 10을 취해서 value_stack에 밀어넣습니다.
+![alt text](./images/byte_code_step_by_step/image-1.png)
+2. STORE_FAST는 현재 Value_stack에 있는 상단 값을 뽑아서 op_arg(0)에 저장시킵니다. 여기서 or_arg는 co_varnames를 참조합니다.
+![alt text](./images/byte_code_step_by_step/image-3.png)
+3. 1번과 마찬가지로 op_arg(2)를 co_const에서 가져와서 value_stack에 밀어넣습니다.
+![alt text](./images/byte_code_step_by_step/image-4.png)
+4. 2번과 마찬가지로, 현재 Value_stack에 있는 상단 값을 뽑아서 op_arg(1) 즉, y에 20을 저장시킵니다.
+![alt text](./images/byte_code_step_by_step/image-5.png)
+5. LOAD_GLOBAL은 co_names 즉, 전역변수를 로드하는 작업입니다. op_arg(0) -> print를 value_stack에 올립니다.
+![alt text](./images/byte_code_step_by_step/image-6.png)
+6. 10, 12번은 동일한 LOAD_FAST이므로 f_local에 있는 인덱스 0번과 1번 즉, `x=10, y=20`을 value_stack에 올립니다.
+![alt text](./images/byte_code_step_by_step/image-7.png)
+7. 10과 20을 pop한 뒤 BINARY_ADD를 수행한 결과인 30을 다시 넣습니다.
+![alt text](./images/byte_code_step_by_step/image-8.png)
+8. CALL_FUNCTION을 수행합니다. op_arg(1)의 의미는 함수를 호출하는데 사용하는 인자를 value_stack에서 1개를 사용하겠다는 것 입니다. 즉 print 함수에 30이 전달되어 실행됩니다.
+![alt text](./images/byte_code_step_by_step/image-9.png)
+9. print 함수의 명시적 반환값이 없으므로 기본적으로 None을 리턴하게 됩니다. 사용하지 않는 값이므로 POP_TOP을 수행하여 제거해줍니다.
+![alt text](./images/byte_code_step_by_step/image-10.png)
+10. co_const의 0번 인덱스(None)를 LOAD_CONST를 수행합니다.
+![alt text](./images/byte_code_step_by_step/image-11.png)
+11. 현재 함수 func도 마찬가지로 반환값이 없으므로 None을 RETURN_VALUE 수행하고 종료됩니다.
+![alt text](./images/byte_code_step_by_step/image-12.png)
 
 # REFERENCES
 - [Deep Dive into Coroutine - 김대희](https://youtu.be/NmSeLspQoAA?feature=shared)
