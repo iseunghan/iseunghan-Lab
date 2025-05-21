@@ -320,6 +320,237 @@ dis.dis(func)
 11. 현재 함수 func도 마찬가지로 반환값이 없으므로 None을 RETURN_VALUE 수행하고 종료됩니다.
 ![alt text](./images/byte_code_step_by_step/image-12.png)
 
+## coroutine 다시 살펴보기
+> 여기서부터 실습은 python 3.12로 진행 하였습니다.
+
+이후에 살펴볼 내용들을 이해하기 위한 바이트 코드를 이제는 읽을 수 있게 되었습니다. native coroutine 함수를 살펴보겠습니다.
+```python
+# coroutine.py
+import asyncio
+
+async def coroutine1():
+    print("coro1 first entry point")
+    await asyncio.sleep(1)
+    print("coro1 second entry point")
+
+import dis
+dis.dis(coroutine1)
+```
+
+아래는 위 native coroutine 함수의 바이트 코드를 출력한 것 입니다.
+```python
+              4           0 RETURN_GENERATOR
+              2 POP_TOP
+              4 RESUME                   0
+
+  5           6 LOAD_GLOBAL              1 (NULL + print)
+             16 LOAD_CONST               1 ('coro1 first entry point')
+             ...
+        >>   72 SEND                     3 (to 82)
+             76 YIELD_VALUE              2
+             78 RESUME                   3
+             80 JUMP_BACKWARD_NO_INTERRUPT     5 (to 72)
+        >>   82 END_SEND
+             84 POP_TOP
+            ...
+```
+눈 여겨볼 부분은 await를 하는 부분의 바이트 코드가 YIELD로 해석된다는 점입니다. 이로써 내부적으로는 제네레이터 기반으로 동작한다는 것을 알 수 있습니다.
+
+이제 Generator 기반 Coroutine 함수도 살펴볼까요?
+> generator 기반 코루틴은 python 3.12 이후 버전부터 지원하지 않습니다. (ref. https://github.com/python/typeshed/issues/10116), 아래 예제가 정확하지 않을 수 있습니다 😭
+
+
+```python
+# generator-coroutine.py
+def coroutine3():
+    print("coroutine3 first entry point")
+    yield from asyncio.sleep(1)
+    print("coroutine3 second entry point")
+```
+> yield와 yield from 차이점은?
+> yield from은 Generator 내부에서 또 다른 sub Generator를 실행하기 위해 사용합니다. 실행권한을 sub Generator에게 위임하고 Return 결과를 받을 수 있게 됩니다.
+
+
+
+바이트 코드로 출력해서 살펴보면,
+```python
+8           0 RETURN_GENERATOR
+              2 POP_TOP
+              4 RESUME                   0
+
+  9           6 LOAD_GLOBAL              1 (NULL + print)
+             16 LOAD_CONST               1 ('coroutine3 first entry point')
+             18 CALL                     1
+             26 POP_TOP
+
+ 10          28 LOAD_GLOBAL              3 (NULL + asyncio)
+             38 LOAD_ATTR                4 (sleep)
+             58 LOAD_CONST               2 (1)
+             60 CALL                     1
+             68 GET_YIELD_FROM_ITER
+             70 LOAD_CONST               0 (None)
+        >>   72 SEND                     3 (to 82)
+             76 YIELD_VALUE              2
+             78 RESUME                   2
+             80 JUMP_BACKWARD_NO_INTERRUPT     5 (to 72)
+        >>   82 END_SEND
+             84 POP_TOP
+            ...
+```
+
+`yield from asyncio.sleep(1)` 함수는 다음과 같이 해석되고 있습니다.
+```python
+10          28 LOAD_GLOBAL              3 (NULL + asyncio)
+             38 LOAD_ATTR                4 (sleep)
+             58 LOAD_CONST               2 (1)
+             60 CALL                     1
+```
+asyncio를 로드해서 sleep 함수 그리고 매개변수 1을 넘겨 call 해줍니다.
+```python
+             68 GET_YIELD_FROM_ITER
+             70 LOAD_CONST               0 (None)
+        >>   72 SEND                     3 (to 82)
+             76 YIELD_VALUE              2
+```
+그런 다음, GET_YIELD_FROM_ITER를 통해 awaitable을 iterator로 변환 (__await__())하고, Send를 통해 중첩된 서브 제네레이터를 실행한 다음 YIELD를 통해 값을 밖으로 밀어넣고 일시중지 시킵니다.
+
+어떻게 yield를 통해 일시정지되고 다시 재개할 수 있는걸까요? Generator 함수를 살펴봅시다.
+```python
+# generator.py
+def generator():
+    recv = yield 1
+    return recv
+
+import dis
+dis.dis(generator)
+
+gen = generator()
+print(gen.send(None)) # 1
+```
+
+byte code는 다음과 같습니다.
+```python
+  1           0 RETURN_GENERATOR
+              2 POP_TOP
+              4 RESUME                   0
+
+  2           6 LOAD_CONST               1 (1)
+              8 YIELD_VALUE              1
+             10 RESUME                   1
+             12 STORE_FAST               0 (recv)
+
+  3          14 LOAD_FAST                0 (recv)
+             16 RETURN_VALUE
+        >>   18 CALL_INTRINSIC_1         3 (INTRINSIC_STOPITERATION_ERROR)
+             20 RERAISE                  1
+```
+`gen.send(None)`를 실행하면 yield까지 실행되고 1이 send 호출자에게 전달되고 suspend 되게 됩니다. (이것은 제네레이터 동작방식을 이미 알고 있다면 이해하고 계실겁니다)
+
+실제로 yield 부분에서 일시정지 되었는지 Generator 함수의 Frame 객체를 얻어와서 확인해보겠습니다.
+
+```python
+# generator.py
+lasti = gen.gi_frame.f_lasti
+print(f">> f_lasti: {lasti}")
+
+code = gen.gi_code.co_code
+op = code[lasti]
+
+import opcode
+print(f">> op: {op}, opname: {opcode.opname[op]}")
+```
+실행결과: 
+```python
+>> f_lasti: 8
+>> op: 150, opname: YIELD_VALUE
+```
+frame의 최근의 실행된 바이트코드의 인덱스는 8으로 확인되었고, code를 얻어와서 opname을 확인해보니 YIELD_VALUE인 것이 확인되었습니다!
+
+send를 더 자세하게 살펴보기 위해 CPython 인터프리터 내부의 실제 send를 수행하는 함수를 살펴보도록 하겠습니다.
+
+### CPython 내부 살펴보기 (gen_send)
+gen.send()를 수행하면 실제로는 [genobject.send_ex](https://github.com/python/cpython/blob/3d396ab7591d544ac8bc1fb49615b4e867ca1c83/Objects/genobject.c#L298)함수가 실행됩니다. 내부에서는 다시 [genobject.send_ex_2](https://github.com/python/cpython/blob/3d396ab7591d544ac8bc1fb49615b4e867ca1c83/Objects/genobject.c#L192)함수를 호출하게 되는데요. 간단하게 살펴보면, gen_send_ex2를 수행해서 PYGEN_RETURN 상태가 된다면 조건문 내부를 수행하는 것 같습니다. gen_send_ex2에 넘겨준 result에 결과에 따라서 Generator를 StopIteration할지 결정하는 것 같습니다.
+```c
+static PyObject *
+gen_send_ex(PyGenObject *gen, PyObject *arg, int exc, int closing)
+{
+    PyObject *result;
+    if (gen_send_ex2(gen, arg, &result, exc, closing) == PYGEN_RETURN) {
+        if (PyAsyncGen_CheckExact(gen)) {
+            assert(result == Py_None);
+            PyErr_SetNone(PyExc_StopAsyncIteration);
+        }
+        else if (result == Py_None) {
+            PyErr_SetNone(PyExc_StopIteration);
+        }
+        else {
+            _PyGen_SetStopIterationValue(result);
+        }
+        Py_CLEAR(result);
+    }
+    return result;
+}
+```
+
+가장 중요한 [genobject.send_ex_2](https://github.com/python/cpython/blob/3d396ab7591d544ac8bc1fb49615b4e867ca1c83/Objects/genobject.c#L192)함수입니다. 너무 많아서 일부분만 발췌했습니다.
+먼저 Thread로부터 ThreadState를 가져오고, 인자로 받은 generator의 `Frame` 객체를 가져옵니다.
+
+그리고 send로 넘어온 arg를 삼항 연산자로 None 처리를 해준 다음 `_PyFrame_StackPush` 함수에 현재 Frame과 arg를 넘겨 Frame의 Value_Stack에 `Push`해줍니다. (이제 어떻게 generator yield 자리에 값이 치환 되는지 알게 되었습니다)
+
+
+```c
+static PySendResult
+gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult,
+             int exc, int closing)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+
+    ...
+
+    /* Push arg onto the frame's value stack */
+    PyObject *arg_obj = arg ? arg : Py_None;
+    _PyFrame_StackPush(frame, PyStackRef_FromPyObjectNew(arg_obj));
+
+    ...
+
+    gen->gi_frame_state = FRAME_EXECUTING;
+    EVAL_CALL_STAT_INC(EVAL_CALL_GENERATOR);
+    PyObject *result = _PyEval_EvalFrame(tstate, frame, exc);
+    ...
+}
+```
+그 다음으로는 현재 Frame을 실행상태로 변경하고, `_PyEval_EvalFrame` 함수를 수행합니다. 처음에는 _PyEval_EvalFrame의 구현체를 찾지 못했는데, 공식문서를 뒤지던 도중 [compiler.md](https://github.com/python/cpython/blob/3d396ab7591d544ac8bc1fb49615b4e867ca1c83/InternalDocs/compiler.md?plain=1#L448)에서 ceval.h를 참조하라는 코멘트 덕분에 실제 [_PyEval_EvalFrame](https://github.com/python/cpython/blob/3d396ab7591d544ac8bc1fb49615b4e867ca1c83/Python/ceval.c#L1009)의 구현체를 발견했습니다!
+
+하지만 실제 바이트 코드를 처리하는 부분은 찾지 못하였고, 내부적으로는 아래 예시와 같이 실제 바이트코드를 처리한다고 합니다.
+```c
+PyObject *
+_PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
+{
+    ...
+    for (;;) {
+        // instruction fetch
+        NEXTOPARG();
+        // dispatch opcode
+        switch (opcode) {
+            case LOAD_FAST:
+                ...
+                DISPATCH();
+            case YIELD_VALUE:
+                retval = TOP();
+                STACK_SHRINK(1);
+                f->f_state = FRAME_SUSPENDED;
+                return retval;
+            ...
+        }
+    }
+}
+```
+지금까지의 내용을 정리해보자면, `Frame` 객체는 함수가 실행될 때 필요한 정보(Value Stack, Local Variable 등)들을 담고 있는 객체입니다. f_back을 통해 Call Stack을 만들 수 있고, f_lasti(Last attemped bytecode)를 통해 함수를 일시정지 및 재개를 할 수 있습니다.
+
+Coroutine은 Generator 기반으로 동작하는 것을 확인하였고, Thread 처럼 Frame 객체를 가지고 있는 것을 알게 되었습니다. (`PyThreadState *tstate = _PyThreadState_GET()`)
+
+
 # REFERENCES
 - [Deep Dive into Coroutine - 김대희](https://youtu.be/NmSeLspQoAA?feature=shared)
 - [Frame objects](https://docs.python.org/3/reference/datamodel.html#frame-objects)

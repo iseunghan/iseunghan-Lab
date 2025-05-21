@@ -1,5 +1,6 @@
 import asyncio
 
+# native-coroutine 함수
 async def coroutine1():
     print("coro1 first entry point")
     await asyncio.sleep(1)
@@ -20,3 +21,7 @@ loop.run_forever()
 # coro2 first entry point
 # coro1 second entry point
 # coro2 second entry point
+
+#-----------------------------------------
+import dis
+dis.dis(coroutine1)
