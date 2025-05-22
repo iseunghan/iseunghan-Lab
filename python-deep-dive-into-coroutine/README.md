@@ -550,6 +550,47 @@ _PyEval_EvalFrameDefault(PyFrameObject *f, int throwflag)
 
 Coroutine은 Generator 기반으로 동작하는 것을 확인하였고, Thread 처럼 Frame 객체를 가지고 있는 것을 알게 되었습니다. (`PyThreadState *tstate = _PyThreadState_GET()`)
 
+## asyncio.sleep 내부 살펴보기
+[asyncio.sleep()](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/tasks.py#L653) 함수 내부는 다음과 같습니다.
+```python
+async def sleep(delay, result=None):
+    """Coroutine that completes after a given time (in seconds)."""
+    if delay <= 0:
+        await __sleep0()
+        return result
+    ...
+```
+만약 delay가 0이하라면 단순히 private 메서드인 `__sleep0`을 실행시키는데요 `__sleep0` 메서드를 살펴보면 단순히 `yield`만 수행합니다.
+```python
+@types.coroutine
+def __sleep0():
+    """Skip one event loop run cycle.
+
+    This is a private helper for 'asyncio.sleep()', used
+    when the 'delay' is set to 0.  It uses a bare 'yield'
+    expression (which Task.__step knows how to handle)
+    instead of creating a Future object.
+    """
+    yield
+```
+이게 아무 의미 없는 것처럼 보이지만, 현재 이벤트 루프의 선점을 포기하여 다음 스케쥴링된 Task에게 우선권을 넘기는 작업을 할 수 있습니다.
+
+sleep 함수의 delay가 0보다 클 때, 로직을 살펴보면, future 객체를 생성하고 event loop에게 delay 이후에 `futures._set_result_unless_cancelled` 메서드를 호출해달라고 등록합니다.
+```python
+async def sleep(delay, result=None):
+    if delay <= 0:
+        await __sleep0()
+        return result
+
+    loop = events.get_running_loop()
+    future = loop.create_future()
+    h = loop.call_later(delay,
+                        futures._set_result_unless_cancelled,
+                        future, result)
+    try:
+        return await future
+```
+
 
 # REFERENCES
 - [Deep Dive into Coroutine - 김대희](https://youtu.be/NmSeLspQoAA?feature=shared)
