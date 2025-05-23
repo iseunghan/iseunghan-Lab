@@ -590,6 +590,117 @@ async def sleep(delay, result=None):
     try:
         return await future
 ```
+마지막에 future를 await를 수행하게 되는데, await는 실제로 yield from 즉, Generator의 `send`를 수행한다는 사실을 우린 이미 알고있습니다. 결론적으론 해당 객체의 `__iter__` 또는 `__await__` 구현체를 찾아 실행시키게 됩니다. 
+
+위에서 future 객체를 생성했으니까 `Future` 클래스의 [`__await__`](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/futures.py#L286) 함수를 살펴보겠습니다.  
+```python
+class Future:
+    def __await__(self):
+        if not self.done():
+            self._asyncio_future_blocking = True
+            yield self  # This tells Task to wait for completion.
+        if not self.done():
+            raise RuntimeError("await wasn't used with future")
+        return self.result()  # May raise too.
+
+    __iter__ = __await__  # make compatible with 'yield from'.
+```
+자기자신인 self를 yield하는 것을 확인할 수 있는데요, 이렇게 yield된 값을 받는 곳은 바로 Task 객체입니다. 
+
+Task 클래스의 [_step](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/tasks.py#L291) 함수를 살펴보겠습니다.  
+이벤트 루프에는 바로 `_step` 메서드가 스케줄링 된 것입니다. 다시 정리하면, 코루틴이 이벤트 루프에 스케줄링 된다는 말은 Task 객체의 _step 메서드가 이벤트 루프에 스케줄링 된다고 할 수 있습니다.
+```python
+class Task(Future):
+    def __step(self, exc=None):
+        ...
+        try:
+            self.__step_run_and_handle_result(exc)
+        finally:
+            _leave_task(self._loop, self)
+            self = None  # Needed to break cycles when an exception occurs.
+```
+
+`__step_run_and_handle_result` 메서드를 살펴보면, coroutine 객체를 가져와서 None을 Send 합니다. 그렇게 result를 받아오는데 이때 result는 Future 인스턴스입니다.
+```python
+class Task(Future):
+    def __step_run_and_handle_result(self, exc):
+        coro = self._coro
+        try:
+            if exc is None:
+                result = coro.send(None)
+            else:
+                result = coro.throw(exc)
+        except StopIteration as exc:
+            if self._must_cancel:
+                self._must_cancel = False
+                super().cancel(msg=self._cancel_message)
+            else:
+                super().set_result(exc.value)
+        except exceptions.CancelledError as exc:
+            self._cancelled_exc = exc
+            super().cancel()
+        ...
+```
+
+그 다음, Future 객체의 `_asyncio_future_blocking` 값(기본 값: None)을 가져옵니다. 
+```python
+class Task(Future):
+    def __step_run_and_handle_result(self, exc):
+        ...
+        except exceptions.CancelledError as exc:
+            self._cancelled_exc = exc
+            super().cancel()
+        else:
+            blocking = getattr(result, '_asyncio_future_blocking', None)
+            if blocking is not None:
+                # Yielded Future must come from Future.__iter__().
+                if futures._get_loop(result) is not self._loop:
+                    new_exc = RuntimeError(
+                        f'Task {self!r} got Future '
+                        f'{result!r} attached to a different loop')
+                    self._loop.call_soon(
+                        self.__step, new_exc, context=self._context)
+                elif blocking:
+                    if result is self:
+                        new_exc = RuntimeError(
+                            f'Task cannot await on itself: {self!r}')
+                        self._loop.call_soon(
+                            self.__step, new_exc, context=self._context)
+                    else:
+                        result._asyncio_future_blocking = False
+                        result.add_done_callback(
+                            self.__wakeup, context=self._context)
+                        self._fut_waiter = result
+                        if self._must_cancel:
+                            if self._fut_waiter.cancel(
+                                    msg=self._cancel_message):
+                                self._must_cancel = False
+                else:
+                    new_exc = RuntimeError(
+                        f'yield was used instead of yield from '
+                        f'in task {self!r} with {result!r}')
+                    self._loop.call_soon(
+                        self.__step, new_exc, context=self._context)
+
+            elif result is None:
+                # Bare yield relinquishes control for one event loop iteration.
+                self._loop.call_soon(self.__step, context=self._context)
+            elif inspect.isgenerator(result):
+                # Yielding a generator is just wrong.
+                new_exc = RuntimeError(
+                    f'yield was used instead of yield from for '
+                    f'generator in task {self!r} with {result!r}')
+                self._loop.call_soon(
+                    self.__step, new_exc, context=self._context)
+            else:
+                # Yielding something else is an error.
+                new_exc = RuntimeError(f'Task got bad yield: {result!r}')
+                self._loop.call_soon(
+                    self.__step, new_exc, context=self._context)
+        finally:
+            self = None  # Needed to break cycles when an exception occurs.
+```
+
 
 
 # REFERENCES
