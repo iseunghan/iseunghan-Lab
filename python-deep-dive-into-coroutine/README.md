@@ -642,24 +642,22 @@ class Task(Future):
         ...
 ```
 
-그 다음, Future 객체의 `_asyncio_future_blocking` 값(기본 값: None)을 가져옵니다. 
+그 다음, result 인스턴스가 실제로 awaitable 한 객체인지 `_asyncio_future_blocking` 속성(기본 값: None)을 가져옵니다. 
+
+result 인스턴스 즉, Future 인스턴스가 awaitable 한 객체라면, `__wakeup` 함수를  `add_done_callback` 함수에게 등록합니다.
+
+이외에도 추가적으로 현재 Future가 다른 event loop에 attached 되었는지, 자기 자신을 await 하는지 등 검증 로직도 포함되어 있습니다.
 ```python
 class Task(Future):
     def __step_run_and_handle_result(self, exc):
         ...
         except exceptions.CancelledError as exc:
-            self._cancelled_exc = exc
-            super().cancel()
+            ...
         else:
             blocking = getattr(result, '_asyncio_future_blocking', None)
             if blocking is not None:
-                # Yielded Future must come from Future.__iter__().
                 if futures._get_loop(result) is not self._loop:
-                    new_exc = RuntimeError(
-                        f'Task {self!r} got Future '
-                        f'{result!r} attached to a different loop')
-                    self._loop.call_soon(
-                        self.__step, new_exc, context=self._context)
+                    ...
                 elif blocking:
                     if result is self:
                         new_exc = RuntimeError(
@@ -675,33 +673,85 @@ class Task(Future):
                             if self._fut_waiter.cancel(
                                     msg=self._cancel_message):
                                 self._must_cancel = False
-                else:
-                    new_exc = RuntimeError(
-                        f'yield was used instead of yield from '
-                        f'in task {self!r} with {result!r}')
-                    self._loop.call_soon(
-                        self.__step, new_exc, context=self._context)
-
-            elif result is None:
-                # Bare yield relinquishes control for one event loop iteration.
-                self._loop.call_soon(self.__step, context=self._context)
-            elif inspect.isgenerator(result):
-                # Yielding a generator is just wrong.
-                new_exc = RuntimeError(
-                    f'yield was used instead of yield from for '
-                    f'generator in task {self!r} with {result!r}')
-                self._loop.call_soon(
-                    self.__step, new_exc, context=self._context)
-            else:
-                # Yielding something else is an error.
-                new_exc = RuntimeError(f'Task got bad yield: {result!r}')
-                self._loop.call_soon(
-                    self.__step, new_exc, context=self._context)
-        finally:
-            self = None  # Needed to break cycles when an exception occurs.
+                ...
 ```
 
+그렇다면 [`Future.add_done_callback`](https://github.com/python/cpython/blob/49d72365cd2d6c09a154a9a061efef4130e2c758/Lib/asyncio/futures.py#L226) 함수는 어떤 것을 수행하는지 살펴보겠습니다.
 
+내부적으로는 단순하게 인자로 받은 `fn`을 내부 `_callbacks` 리스트에 append를 해줍니다.
+```python
+def add_done_callback(self, fn, *, context=None):
+    ...
+    self._callbacks.append((fn, context))
+```
+
+다음으로는 Future가 완료됐을 때 실행되는 [Future.set_result](https://github.com/python/cpython/blob/49d72365cd2d6c09a154a9a061efef4130e2c758/Lib/asyncio/futures.py#L257C5-L267C36) 함수에서는 Future의 상태를 FINISHED로 마킹하고 또 다시 `__schedule_callbacks`를 호출합니다. 
+```python
+def set_result(self, result):
+    ...
+    self._result = result
+    self._state = _FINISHED
+    self.__schedule_callbacks()
+```
+
+[Future.__schedule_callbacks](https://github.com/python/cpython/blob/49d72365cd2d6c09a154a9a061efef4130e2c758/Lib/asyncio/futures.py#L167) 에서는 작업을 끝내는게 아닌, 또 다시 call_soon을 호출하게 됩니다. 직접 실행하는게 아닌 call_soon에게 처리를 위임시킵니다.
+```python
+def __schedule_callbacks(self):
+    callbacks = self._callbacks[:]
+    if not callbacks:
+        return
+
+    self._callbacks[:] = []
+    for callback, ctx in callbacks:
+        self._loop.call_soon(callback, self, context=ctx)
+```
+
+다음으로는 `__wakeup` 함수입니다. __wakeup 내부적으로 다시 Task.__step()을 호출하여 현재 Task를 재개하는 역할을 수행합니다. await 된 Future 객체가 완료될 때까지 `__step -> __wakeup -> __step ...` 이런 과정들이 반복되면서 스케쥴링 되고 있던 것을 알 수 있습니다.
+```python
+def __wakeup(self, future):
+        try:
+            future.result()
+        except BaseException as exc:
+            # This may also be a cancellation.
+            self.__step(exc)
+        else:
+            # Don't pass the value of `future.result()` explicitly,
+            # as `Future.__iter__` and `Future.__await__` don't need it.
+            # If we call `_step(value, None)` instead of `_step()`,
+            # Python eval loop would use `.send(value)` method call,
+            # instead of `__next__()`, which is slower for futures
+            # that return non-generator iterators from their `__iter__`.
+            self.__step()
+        self = None  # Needed to break cycles when an exception occurs.
+```
+
+우리의 코루틴 예제(coroutine.py)를 살펴보면, create_task 부분이 있습니다.
+```python
+async def coroutine1():
+    print("coro1 first entry point")
+    await asyncio.sleep(1)
+    print("coro1 second entry point")
+
+async def coroutine2():
+    print("coro2 first entry point")
+    await asyncio.sleep(1)
+    print("coro2 second entry point")
+
+loop = asyncio.get_event_loop()
+loop.create_task(coroutine1())
+loop.create_task(coroutine2())
+loop.run_forever()
+```
+create_task를 수행하게 되면 실제로는 [Task의 `__init__()`](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/tasks.py#L139) 가 호출되게 되는데요. 
+```python
+class Task(futures._PyFuture):
+    def __init__(self, coro, *, loop=None, name=None, context=None,
+                 eager_start=False):
+        ...
+            self._loop.call_soon(self.__step, context=self._context)
+            _register_task(self)
+```
+내부적으로 _step 함수를 event loop에 call_soon 함수를 이용해서 스케줄링하는 것을 확인하실 수 있습니다!
 
 # REFERENCES
 - [Deep Dive into Coroutine - 김대희](https://youtu.be/NmSeLspQoAA?feature=shared)
