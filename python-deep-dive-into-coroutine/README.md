@@ -576,7 +576,7 @@ def __sleep0():
     """
     yield
 ```
-이게 아무 의미 없는 것처럼 보이지만, 현재 이벤트 루프의 선점을 포기하여 다음 스케쥴링된 Task에게 우선권을 넘기는 작업을 할 수 있습니다.
+이게 아무 의미 없는 것처럼 보이지만, 현재 이벤트 루프의 선점을 포기하여 다음 스케줄링된 Task에게 우선권을 넘기는 작업을 할 수 있습니다.
 
 sleep 함수의 delay가 0보다 클 때, 로직을 살펴보면, future 객체를 생성하고 event loop에게 delay 이후에 `futures._set_result_unless_cancelled` 메서드를 호출해달라고 등록합니다.
 ```python
@@ -709,7 +709,7 @@ def __schedule_callbacks(self):
         self._loop.call_soon(callback, self, context=ctx)
 ```
 
-다음으로는 `__wakeup` 함수입니다. __wakeup 내부적으로 다시 Task.__step()을 호출하여 현재 Task를 재개하는 역할을 수행합니다. await 된 Future 객체가 완료될 때까지 `__step -> __wakeup -> __step ...` 이런 과정들이 반복되면서 스케쥴링 되고 있던 것을 알 수 있습니다.
+다음으로는 `__wakeup` 함수입니다. __wakeup 내부적으로 다시 Task.__step()을 호출하여 현재 Task를 재개하는 역할을 수행합니다. await 된 Future 객체가 완료될 때까지 `__step -> __wakeup -> __step ...` 이런 과정들이 반복되면서 스케줄링 되고 있던 것을 알 수 있습니다.
 ```python
 def __wakeup(self, future):
         try:
@@ -755,6 +755,219 @@ class Task(futures._PyFuture):
             _register_task(self)
 ```
 내부적으로 _step 함수를 event loop에 call_soon 함수를 이용해서 스케줄링하는 것을 확인하실 수 있습니다!
+
+# Custom Event Loop를 만들어보기
+그럼 이제 Custom Event Loop를 직접 만들어 보겠습니다. 직접 만들어보면서 내부적으로 서로 유기적으로 연결되어있는지 또 어떻게 동작하는지 더욱 더 깊게 파악할 수 있습니다.
+
+먼저 EventLoop를 구현하기 전에 내부적으로 다루는 Handle 객체와 TimeHandle 객체를 이해해야 합니다.
+[Handle](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/events.py#L29) 객체는 콜백함수를 래핑한 함수입니다. 초기화를 할 때, 콜백함수와 매개변수를 받은 다음 _run을 통해서 해당 콜백함수를 실행하는 역할을 합니다.
+```python
+class Handle:
+    def __init__(self, callback, args, loop, context=None):
+        if context is None:
+            context = contextvars.copy_context()
+        self._context = context
+        self._loop = loop
+        self._callback = callback
+        self._args = args
+        ...
+
+    def _run(self):
+        try:
+            self._context.run(self._callback, *self._args)
+        ...
+```
+
+
+다음은 [TimeHandle](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/events.py#L106) 객체입니다. Handle을 상속받았는데 when이라는 속성을 더 가졌습니다. when 속성은 Handle 객체가 언제 실행되어야 하는지에 대한 시간 정보를 나타내기 때문에 EventLoop에서 해당 when을 보고 실행시켜야 하는지를 판단합니다. 그리고 TimerHandle에는 when을 비교하는 여러 메서드(lt, le, gt, ge, eq 등)가 구현되어있으므로, 나중에 시간순으로 나열할 때 유용합니다.
+```python
+class TimerHandle(Handle):
+    def __init__(self, when, callback, args, loop, context=None):
+        super().__init__(callback, args, loop, context)
+        if self._source_traceback:
+            del self._source_traceback[-1]
+        self._when = when
+        self._scheduled = False
+
+    def __lt__(self, other):
+        ...
+
+    def __gt__(self, other):
+        if isinstance(other, TimerHandle):
+            return self._when > other._when
+
+    def __eq__(self, other):
+        ...
+```
+
+asyncio 패키지 내부에 [AbstractEventLoop](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/events.py#L211)라는 클래스가 있는데 이 클래스를 상속받아 구현하면 이벤트 루프를 만들 수 있습니다.
+
+생성자에서는 특정 시점에 실행되어야 할 `TimeHandle` 객체를 저장할 scheduled 리스트 변수와 곧 실행될 Handle 객체를 저장할 ready deque를 들고 있습니다.
+```python
+class CustomEventLoop(AbstractEventLoop):
+    def __init__(self):
+        self._scheduled = []
+        self._ready = deque()
+```
+
+이전에 앞서 살펴본 `call_soon` 함수 입니다. `call_soon` 함수는 곧 실행될 Handle 객체를 생성하여 _ready deque에 추가합니다. `call_later` 함수는 특정 시간에 실행될 TimeHandle 객체를 생성하는데요, 현재 시간 + delay를 when 매개변수로 `call_at` 함수를 호출하는데요, `call_at` 함수는 when을 가지고 TimeHandle 객체를 생성하여 scheduled에 추가해줌으로써 스케줄링이 시작됩니다.
+```python
+class CustomEventLoop(AbstractEventLoop):
+    def call_soon(self, callback, *args, context=None):
+        handle = Handle(callback, args, self, context)
+        self._ready.append(handle)
+        return handle
+    
+    def call_later(self, delay, callback, *args):
+        timer = self.call_at(self.time() + delay, callback, *args)
+        return timer
+
+    def call_at(self, when, callback, *args):
+        timer = TimerHandle(when, callback, args, self)
+        heappush(self._scheduled, timer)
+        return timer
+```
+
+create_future와 create_task는 내부적으로 각각 Future, Task를 생성하여 반환합니다. time 함수는 현재 시간의 초를 반환합니다.
+```python
+class CustomEventLoop(AbstractEventLoop):
+    def create_future(self):
+        return Future(loop=self)
+
+    def create_task(self, coro):
+        return Task(coro, loop=self)
+    
+    def time(self):
+        return time.monotonic()
+```
+
+아래 get_debug, _timer_handle_cancelled, call_exception_handler 함수들은 사용하지 않지만 구현하지 않으면 NotImplementedError가 발생하기 때문에 아래와 같이 구현만 해줬습니다.
+```python
+class CustomEventLoop(AbstractEventLoop):
+    def get_debug(self):
+        pass
+    
+    def _timer_handle_cancelled(self, handle):
+        pass
+    
+    def call_exception_handler(self, context):
+        pass
+```
+
+가장 중요한 `run_forever` 함수입니다. 함수 내부에서는 while문 무한루프를 돌면서 `_run_once` 함수를 지속적으로 콜합니다.
+
+```python
+class CustomEventLoop(AbstractEventLoop):
+    def run_forever(self):
+        while True:
+            self._run_once()
+    
+    def _run_once(self):
+        while self._scheduled and self._scheduled[0]._when <= self.time():
+            timer: TimerHandle = heappop(self._scheduled)
+            self._ready.append(timer)
+        
+        len_ready = len(self._ready)
+        for _ in range(len_ready):
+            handle: TimerHandle = self._ready.popleft()
+            handle._run() # 내부적으로 Task의 _step()도 함께 호출된다.
+        
+        timeout = 0
+        if self._scheduled and not self._ready:
+            timeout = max(0, self._scheduled[0]._when - self.time())
+        time.sleep(timeout) # <- 무한루프에 빠질 위험이 있다
+
+```
+
+`_run_once` 함수를 살펴보면 다음과 같은 순서로 실행됩니다.
+1. 스케줄링 된 TimeHandle이 있다면, 현재 시각 기준으로 실행되어야 할 작업인지 확인합니다.
+2. heap에서 _when이 가장 빠른 작업을 pop하여 가져온 뒤, _ready 대기열에 추가해줍니다.
+3. _ready를 순회하면서, [`Handle._run`](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/events.py#L86) 함수를 실행합니다. [_run](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/events.py#L86) 함수를 살펴볼까요?
+```python
+def _run(self):
+    try:
+        self._context.run(self._callback, *self._args)
+    ...
+    self = None  # Needed to break cycles when an exception occurs.
+```
+멤버변수인 _context.run을 호출하고 있습니다. _context는 Handle 객체가 생성될 때, Task들이 독립적으로 실행될 수 있도록 [기본적으로 contextvars.Context 객체를 복사해서 사용](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/events.py#L38)하고 있습니다. 결국 독립된 컨텍스트에서 _callback 함수를 실행하는 역할을 수행합니다.  
+
+4. 여기서부터는 `[asyncio.sleep 내부 살펴보기]`에서 봤던 Task 클래스의 [_step](https://github.com/python/cpython/blob/fd6c5fe7869fd0519f2a222e769553b91815ff1a/Lib/asyncio/tasks.py#L291) 함수부터 이벤트 루프에 의해 스케줄링됩니다.
+
+
+### CustomEventLoop를 실행해봅시다.
+CustomEventLoop를 통해서 코루틴을 실행하는 간단한 실습을 해보겠습니다.  
+```python
+# custom_event_loop_run.py
+import asyncio
+from custom_event_loop import CustomEventLoop
+
+
+async def coroutine1():
+    print("coro1 first entry point")
+    await asyncio.sleep(1)
+    print("coro1 second entry point")
+
+async def coroutine2():
+    print("coro2 first entry point")
+    await asyncio.sleep(2)
+    print("coro2 second entry point")
+
+loop = CustomEventLoop()
+asyncio.set_event_loop(loop)
+
+loop.create_task(coroutine1())
+loop.create_task(coroutine2())
+loop.run_forever()
+```
+
+실행결과:  
+```python
+python custom_event_loop_eun.py
+coro1 first entry point
+coro2 first entry point
+^CTraceback (most recent call last):
+  File "/Users/shlee/workspaces/study/iseunghan-Lab/python-deep-dive-into-coroutine/custom_event_loop_eun.py", line 21, in <module>
+    loop.run_forever()
+  File "/Users/shlee/workspaces/study/iseunghan-Lab/python-deep-dive-into-coroutine/custom_event_loop.py", line 46, in run_forever
+    self._run_once()
+  File "/Users/shlee/workspaces/study/iseunghan-Lab/python-deep-dive-into-coroutine/custom_event_loop.py", line 61, in _run_once
+    time.sleep(timeout) # <- 무한루프에 빠질 위험이 있다
+    ^^^^^^^^^^^^^^^^^^^
+```
+실행결과를 살펴보면, first entry point만 출력되고 second entry point가 출력되지 않았습니다. 왜 이런걸까요? 다음과 같이 디버깅 출력문을 통해 살펴보겠습니다.
+```python
+class CustomEventLoop(AbstractEventLoop):
+    def call_later(self, delay, callback, *args, context=None):
+        print(f"[log] call_later: at={self.time() + delay}, delay={delay}, callback={callback}, args={args}, context={context}")
+        return self.call_at(self.time() + delay, callback, *args, context=context)
+
+    def _run_once(self):
+        ...
+        for _ in range(len_ready):
+            handle: TimerHandle = self._ready.popleft()
+            print(f"[log] handle: {handle}, when: {handle._run}")
+            handle._run() # 내부적으로 Task의 _step()도 함께 호출된다.
+
+        print(f"[log] Scheduled tasks: {self._scheduled}")
+        print(f"[log] Ready tasks: {self._ready}")        
+        ...
+```
+실행결과:
+```txt
+[log] call_later: at=43708.48690775, delay=0, callback=<_asyncio.TaskStepMethWrapper object at 0x100647010>, args=(), context=<_contextvars.Context object at 0x10120bbc0>
+[log] call_later: at=43708.486941375, delay=0, callback=<_asyncio.TaskStepMethWrapper object at 0x1011b1e70>, args=(), context=<_contextvars.Context object at 0x101209640>
+
+[log] handle: <TimerHandle when=43708.486933416 <_asyncio.TaskStepMethWrapper object at 0x100647010>()>, when: <bound method Handle._run of <TimerHandle when=43708.486933416 <_asyncio.TaskStepMethWrapper object at 0x100647010>()>>
+[log] handle: <TimerHandle when=43708.48694775 <_asyncio.TaskStepMethWrapper object at 0x1011b1e70>()>, when: <bound method Handle._run of <TimerHandle when=43708.48694775 <_asyncio.TaskStepMethWrapper object at 0x1011b1e70>()>>
+
+[log] Scheduled tasks: []
+[log] Ready tasks: deque([])
+```
+로그를 살펴보면, 최초 코루틴을 등록했을 때는 call_later가 호출되어 정상적으로 _scheduled에 등록되었습니다. 이후 Handle 객체로 뽑아와서 _run을 호출하는 로그까지 잘 찍혔지만, 문제는 asyncio.sleep을 만나서 다시 call_later를 통해 이벤트 루프에 등록되어야 하는데 call_later 호출 로그가 찍히지 않은 것을 보니 이벤트 루프를 찾지 못한 것 같습니다.
+
+
+
 
 # REFERENCES
 - [Deep Dive into Coroutine - 김대희](https://youtu.be/NmSeLspQoAA?feature=shared)
