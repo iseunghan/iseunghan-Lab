@@ -966,9 +966,32 @@ class CustomEventLoop(AbstractEventLoop):
 ```
 로그를 살펴보면, 최초 코루틴을 등록했을 때는 call_later가 호출되어 정상적으로 _scheduled에 등록되었습니다. 이후 Handle 객체로 뽑아와서 _run을 호출하는 로그까지 잘 찍혔지만, 문제는 asyncio.sleep을 만나서 다시 call_later를 통해 이벤트 루프에 등록되어야 하는데 call_later 호출 로그가 찍히지 않은 것을 보니 이벤트 루프를 찾지 못한 것 같습니다.
 
+왜 안될까를 살펴보던 중.. 구글 검색을 통해 관련 [issue](https://github.com/python/cpython/issues/85134#issuecomment-1264746033)를 발견했습니다. 이슈를 정리하면 다음과 같습니다.
+> 자신의 이벤트 루프를 구현하려면 (asyncio.baseeventLoop.run_forever ()를 호출하지 않고)를 asyncio._set_running_loop()를 사용해야합니다. 
 
+왜 그런지 BaseEventLoop의 [run_forever](https://github.com/python/asyncio/pull/452/files#diff-f57505d1f4330e1cb061ee8e5beb4ea518c7f27a9cc6a2ebfea1e28543e2dd46R407) 함수를 보면, `_run_once`를 호출하기 전에 running_loop를 자기 자신(BaseEventLoop)으로 등록을 시킵니다. CustomEventLoop를 구현하면서 해당 부분이 누락되었기 때문에 EventLoop가 None을 반환하여 코루틴이 정상적으로 동작하지 못한 것으로 판단됩니다. 
 
+CustomEventLoop의 `run_forever`에 다음 코드를 추가함으로써 해결할 수 있습니다.
+```python
+def run_forever(self):
+    asyncio._set_running_loop(self)
+    while True:
+        self._run_once()
+```
+
+다시 custom_event_loop_run.py를 실행해보면? 정상적으로 실행되는 것을 확인하실 수 있습니다!
+```txt
+coro1 first entry point
+coro2 first entry point
+coro1 second entry point
+coro2 second entry point
+
+```
+
+# 마무리
+처음에는 generator와 asyncio에 대해서 제대로 학습하지 않은 채로 사용하니 이벤트 루프가 `비선점 멀티태스킹`이므로 CPU Bound 작업을 Task로 등록하면 이벤트 루프를 계속 선점하여 다른 Task들이 실행되지 못하는 등등 잘못알고 사용하면 많은 문제점들이 발생합니다. 이번 시간을 통해 이벤트 루프를 실행하는데 필요한 개념들(Generator, CallStack, Frame)을 바이트 코드 레벨까지 살펴봄으로 써 더욱 더 동작원리를 파악하고 적합한 곳에 사용할 수 있을 것 같다고 생각합니다.  
 
 # REFERENCES
 - [Deep Dive into Coroutine - 김대희](https://youtu.be/NmSeLspQoAA?feature=shared)
 - [Frame objects](https://docs.python.org/3/reference/datamodel.html#frame-objects)
+- [Github Cpython](https://github.com/python/cpython/tree/fd6c5fe7869fd0519f2a222e769553b91815ff1a)

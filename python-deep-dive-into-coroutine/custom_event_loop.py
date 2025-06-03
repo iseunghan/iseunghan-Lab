@@ -1,4 +1,5 @@
 from asyncio import AbstractEventLoop, Future, Task, TimerHandle
+import asyncio
 from collections import deque
 from heapq import heappop, heappush
 import time
@@ -36,6 +37,7 @@ class CustomEventLoop(AbstractEventLoop):
         pass
     
     def run_forever(self):
+        asyncio._set_running_loop(self) # ref. https://github.com/python/asyncio/pull/452/files#diff-f57505d1f4330e1cb061ee8e5beb4ea518c7f27a9cc6a2ebfea1e28543e2dd46R407
         while True:
             self._run_once()
     
