@@ -14,6 +14,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
  */
 @Slf4j
 @RequiredArgsConstructor
+@Deprecated
 public class WebsocketHandler extends TextWebSocketHandler {
     private final WebSocketSessionManager sessionManager;
 

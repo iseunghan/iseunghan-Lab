@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<!-- 사용방법
+  1. 현재 파일의 위치를 확인합니다. (예: /Users/shlee/stomp-client.html)
+  2. 웹 브라우저에서 다음 URL을 엽니다. (예: http://localhost:3000/Users/shlee/stomp-client.html)
+-->
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <title>STOMP 실시간 메시지 테이블 데모</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- STOMP.js CDN (SockJS 제거됨) -->
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+            Arial, sans-serif;
+            margin: 20px;
+        }
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        input[type="text"] {
+            padding: 8px;
+            min-width: 280px;
+        }
+        button {
+            padding: 8px 14px;
+            cursor: pointer;
+        }
+        #status {
+            font-weight: 600;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 10px;
+        }
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            font-size: 14px;
+        }
+        th {
+            background: #f5f5f7;
+            text-align: left;
+        }
+        tbody tr:nth-child(odd) {
+            background: #fafafa;
+        }
+        .right {
+            text-align: right;
+        }
+        .wrap {
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+        .muted {
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+<h2>STOMP 실시간 메시지 테이블</h2>
+
+<div class="row">
+    <label for="endpoint"><strong>핸드셰이크 엔드포인트</strong></label>
+    <input id="endpoint" type="text" value="/ws-stomp" />
+</div>
+
+<div class="row">
+    <label for="topic"><strong>구독 토픽</strong></label>
+    <input
+            id="topic"
+            type="text"
+            placeholder="예: 2c_cf_67_df_76_88"
+            value="2c_cf_67_df_76_88"
+    />
+    <button id="btnConnect">연결 & 구독 시작</button>
+    <button id="btnDisconnect" disabled>연결 종료</button>
+    <button id="btnClear">테이블 비우기</button>
+    <span id="status" class="muted">disconnected</span>
+</div>
+
+<table id="msgTable">
+    <thead>
+    <tr>
+        <th style="width: 150px">수신 시각</th>
+        <th style="width: 240px">목적지</th>
+        <th class="right" style="width: 100px">크기(bytes)</th>
+        <th>본문</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+    let stomp = null;
+    let subscription = null;
+    let connected = false;
+
+    const $endpoint = document.getElementById("endpoint");
+    const $topic = document.getElementById("topic");
+    const $btnConnect = document.getElementById("btnConnect");
+    const $btnDisconnect = document.getElementById("btnDisconnect");
+    const $btnClear = document.getElementById("btnClear");
+    const $status = document.getElementById("status");
+    const $tbody = document.querySelector("#msgTable tbody");
+
+    function setStatus(text, ok = false) {
+        $status.textContent = text;
+        $status.className = ok ? "" : "muted";
+    }
+
+    function setButtons() {
+        $btnConnect.disabled = connected;
+        $btnDisconnect.disabled = !connected;
+    }
+
+    function appendRow(destination, body) {
+        const now = new Date();
+        const ts = now.toLocaleString();
+        const size =
+            typeof body === "string" ? body.length : JSON.stringify(body).length;
+
+        const tr = document.createElement("tr");
+        const tdTime = document.createElement("td");
+        const tdDest = document.createElement("td");
+        const tdSize = document.createElement("td");
+        const tdBody = document.createElement("td");
+
+        tdTime.textContent = ts;
+        tdDest.textContent = destination;
+        tdSize.textContent = size.toString();
+        tdSize.className = "right";
+
+        let text;
+        try {
+            const parsed = typeof body === "string" ? JSON.parse(body) : body;
+            text = JSON.stringify(parsed, null, 2);
+        } catch {
+            text = typeof body === "string" ? body : String(body);
+        }
+        tdBody.textContent = text;
+        tdBody.className = "wrap";
+
+        tr.appendChild(tdTime);
+        tr.appendChild(tdDest);
+        tr.appendChild(tdSize);
+        tr.appendChild(tdBody);
+        $tbody.appendChild(tr);
+
+        tr.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+
+    function connectAndSubscribe() {
+        const endpoint = $endpoint.value.trim();
+        const topic = $topic.value.trim();
+
+        if (!endpoint || !topic) {
+            alert("엔드포인트와 토픽을 확인하세요.");
+            return;
+        }
+
+        // 기존 연결 정리
+        if (stomp && connected) {
+            try {
+                subscription?.unsubscribe();
+            } catch {}
+            try {
+                stomp.disconnect(() => {}, {});
+            } catch {}
+        }
+
+        setStatus("connecting...");
+
+        // ⭐ SockJS 제거하고 순수 WebSocket 사용
+        const wsUrl =
+            "ws://localhost:8080" + endpoint;
+
+        const ws = new WebSocket(wsUrl);
+
+        stomp = Stomp.over(ws);
+        stomp.debug = null; // 필요 시 로그 끄기
+
+        stomp.heartbeat.outgoing = 10000;
+        stomp.heartbeat.incoming = 10000;
+
+        stomp.connect(
+            {
+                Authorization: "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyQHN5bmFuby5jb20iLCJhdXRob3JpdHkiOiJST0xFX1VTRVIiLCJpc3MiOiJpbjhvcHMuY29tIiwiZXhwIjoxNzYzNjIwNjQxLCJpYXQiOjE3NjM1MzQyNDEsInVzZXJJZCI6Mn0.5iwO4nxEXPU3B82YQfZt0V4ECSE1rInL1R5-rxNnpMM"
+            },
+            () => {
+                connected = true;
+                setButtons();
+                setStatus("connected", true);
+
+                const dest = "/streaming/" + topic;
+                subscription = stomp.subscribe(dest, (frame) => {
+                    appendRow(dest, frame.body);
+                });
+
+                setStatus(`subscribed: ${dest}`, true);
+            },
+            (err) => {
+                connected = false;
+                setButtons();
+                console.error("STOMP error:", err);
+                setStatus("connect error: " + err.message, false);
+            }
+        );
+
+        ws.onclose = (ev) => {
+            connected = false;
+            setButtons();
+            setStatus("disconnected (code " + ev.code + ")", false);
+        };
+    }
+
+    function disconnect() {
+        if (!stomp) return;
+        try {
+            subscription?.unsubscribe();
+        } catch {}
+        try {
+            stomp.disconnect(() => {
+                connected = false;
+                setButtons();
+                setStatus("disconnected", false);
+            });
+        } catch {
+            connected = false;
+            setButtons();
+            setStatus("disconnected", false);
+        }
+    }
+
+    $btnConnect.addEventListener("click", connectAndSubscribe);
+    $btnDisconnect.addEventListener("click", disconnect);
+    $btnClear.addEventListener("click", () => ($tbody.innerHTML = ""));
+
+    window.addEventListener("beforeunload", () => {
+        try {
+            subscription?.unsubscribe();
+        } catch {}
+        try {
+            stomp?.disconnect(() => {});
+        } catch {}
+    });
+</script>
+</body>
+</html>

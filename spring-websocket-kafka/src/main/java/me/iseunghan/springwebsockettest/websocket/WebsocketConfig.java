@@ -2,20 +2,29 @@ package me.iseunghan.springwebsockettest.websocket;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.*;
 
 @Configuration
-@EnableWebSocket
-public class WebsocketConfig implements WebSocketConfigurer {
+@EnableWebSocketMessageBroker
+public class WebsocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Bean
     public WebSocketSessionManager webSocketSessionManager() {
         return new WebSocketSessionManager();
     }
 
-    // 원하는 핸들러 등록해서 사용
     @Override
-    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(new WebsocketHandler(webSocketSessionManager()), "/websocket");
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        registry.addEndpoint("/ws-stomp")
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
+    }
+
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry registry) {
+        registry.setApplicationDestinationPrefixes("/app")
+                .enableSimpleBroker("/streaming")
+        ;
     }
 }
