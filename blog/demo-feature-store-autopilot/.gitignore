@@ -1,0 +1,35 @@
+# Environment (actual env files, not examples)
+.env
+!.env.example
+
+# Docker volumes (data persistence)
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+
+# Feast
+feast_repo/data/
+*.db
+
+# OMC (oh-my-claudecode)
+.omc/

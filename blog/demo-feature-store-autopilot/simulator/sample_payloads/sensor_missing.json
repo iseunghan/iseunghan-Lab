@@ -1,0 +1,54 @@
+{
+  "vehicle_id": "vehicle-001",
+  "timestamp": "2026-05-21T10:45:00.000000",
+  "event_id": "vehicle-001-1716290700000",
+  "scenario": "sensor_missing",
+  "sensor_data": {
+    "speed_kmh": 30.0,
+    "acceleration_mps2": 0.5,
+    "obstacle_distance_m": 20.0,
+    "lidar_points": 0,
+    "gps": {
+      "latitude": 37.4419,
+      "longitude": -122.1430,
+      "accuracy_m": 5.0
+    },
+    "sensor_status": {
+      "lidar": "failed",
+      "camera": "active",
+      "radar": "active",
+      "ultrasonic": "active"
+    },
+    "missing_sensors": ["lidar"]
+  },
+  "media_data": {
+    "camera_frames": {
+      "front": {
+        "objects_detected": 5,
+        "pedestrians": 0,
+        "vehicles": 3,
+        "lane_detected": true,
+        "lane_confidence": 0.70
+      },
+      "rear": {
+        "objects_detected": 2,
+        "pedestrians": 0,
+        "vehicles": 1,
+        "lane_detected": true,
+        "lane_confidence": 0.65
+      }
+    },
+    "audio": {
+      "noise_level_db": 52.0,
+      "siren_detected": false,
+      "horn_detected": false
+    }
+  },
+  "context": {
+    "location_type": "highway",
+    "weather": "clear",
+    "time_of_day": "day",
+    "traffic_density": "low",
+    "warning": "Sensor failure detected: lidar"
+  }
+}

@@ -1,0 +1,234 @@
+services:
+  # Zookeeper (Kafka 의존성)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+    networks:
+      - mlops-network
+
+  # Kafka (Zookeeper mode - simpler for development)
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - mlops-network
+
+  # MinIO (Object Storage)
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-admin123}
+      MINIO_DOMAIN: minio
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      mlops-network:
+        aliases:
+          - mlops-features.minio
+          - mlops-raw-media.minio
+
+  # InfluxDB (Time-series)
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: admin123
+      DOCKER_INFLUXDB_INIT_ORG: mlops
+      DOCKER_INFLUXDB_INIT_BUCKET: features
+      DOCKER_INFLUXDB_INIT_RETENTION: 0
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_ADMIN_USER_TOKEN:-influx-admin-token}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    networks:
+      - mlops-network
+
+  # Redis (Online Store)
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis123}
+    volumes:
+      - redis-data:/data
+    networks:
+      - mlops-network
+
+  # Kafka UI (Management)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8090:8080"
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - mlops-network
+
+  # RedisInsight (Management)
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: redisinsight
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
+    networks:
+      - mlops-network
+
+  # Backend (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - kafka
+      - minio
+      - influxdb
+      - redis
+    environment:
+      KAFKA_BROKER: kafka:29092
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
+      MINIO_SECURE: "false"
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      AWS_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
+      S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
+      S3_ENDPOINT: minio:9000
+      S3_ENDPOINT_URL: minio:9000
+      S3_REGION: us-east-1
+      S3_USE_SSL: "false"
+      S3_VERIFY_SSL: "false"
+      S3_URL_STYLE: path
+      AWS_S3_URL_STYLE: path
+      DUCKDB_S3_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-admin}
+      DUCKDB_S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
+      DUCKDB_S3_ENDPOINT: minio:9000
+      DUCKDB_S3_REGION: us-east-1
+      DUCKDB_S3_USE_SSL: "false"
+      DUCKDB_S3_URL_STYLE: path
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_ADMIN_USER_TOKEN:-influx-admin-token}
+      INFLUXDB_ORG: mlops
+      INFLUXDB_BUCKET: features
+      REDIS_URL: redis:6379
+      FEAST_DATA_PATH: s3://mlops-features
+    env_file:
+      - .env
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  # Frontend (Streamlit)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+    environment:
+      API_BASE_URL: http://backend:8000
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  # Media Consumer - Stores media metadata to MinIO
+  media-consumer:
+    build:
+      context: ./consumers
+      dockerfile: media_consumer/Dockerfile
+    container_name: media-consumer
+    depends_on:
+      - kafka
+      - minio
+    environment:
+      KAFKA_HOST: kafka:29092
+      KAFKA_TOPIC: vehicle-events
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
+      MINIO_BUCKET: mlops-raw-media
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+  # Sensor Consumer - Stores sensor data to InfluxDB
+  sensor-consumer:
+    build:
+      context: ./consumers
+      dockerfile: sensor_consumer/Dockerfile
+    container_name: sensor-consumer
+    depends_on:
+      - kafka
+      - influxdb
+    environment:
+      KAFKA_HOST: kafka:29092
+      KAFKA_TOPIC: vehicle-events
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_ADMIN_USER_TOKEN:-influx-admin-token}
+      INFLUXDB_ORG: mlops
+      INFLUXDB_BUCKET: features
+    networks:
+      - mlops-network
+    restart: unless-stopped
+
+volumes:
+  zookeeper-data:
+  kafka-data:
+  minio-data:
+  influxdb-data:
+  redis-data:
+
+networks:
+  mlops-network:
+    driver: bridge

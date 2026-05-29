@@ -1,0 +1,15 @@
+project: vehicle_risk_demo
+provider: local
+registry: data/registry.db
+metadata_store:
+  type: sqlite
+  path: data/metadata.db
+
+offline_store:
+  type: duckdb
+
+online_store:
+  type: redis
+  connection_string: redis:6379,password=redis123
+
+entity_key_serialization_version: 2
