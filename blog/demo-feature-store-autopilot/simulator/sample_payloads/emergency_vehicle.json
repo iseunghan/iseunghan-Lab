@@ -1,0 +1,55 @@
+{
+  "vehicle_id": "vehicle-001",
+  "timestamp": "2026-05-21T16:00:00.000000",
+  "event_id": "vehicle-001-1716307200000",
+  "scenario": "emergency_vehicle",
+  "sensor_data": {
+    "speed_kmh": 50.0,
+    "acceleration_mps2": -2.5,
+    "obstacle_distance_m": 30.0,
+    "lidar_points": 1250,
+    "gps": {
+      "latitude": 37.4419,
+      "longitude": -122.1430,
+      "accuracy_m": 2.0
+    },
+    "sensor_status": {
+      "lidar": "active",
+      "camera": "active",
+      "radar": "active",
+      "ultrasonic": "active"
+    },
+    "missing_sensors": []
+  },
+  "media_data": {
+    "camera_frames": {
+      "front": {
+        "objects_detected": 4,
+        "pedestrians": 0,
+        "vehicles": 3,
+        "lane_detected": true,
+        "lane_confidence": 0.86
+      },
+      "rear": {
+        "objects_detected": 4,
+        "pedestrians": 0,
+        "vehicles": 2,
+        "lane_detected": true,
+        "lane_confidence": 0.82
+      }
+    },
+    "audio": {
+      "noise_level_db": 80.0,
+      "siren_detected": true,
+      "horn_detected": false
+    }
+  },
+  "context": {
+    "location_type": "highway",
+    "weather": "clear",
+    "time_of_day": "day",
+    "traffic_density": "medium",
+    "emergency_vehicle_detected": true,
+    "emergency_vehicle_direction": "rear"
+  }
+}

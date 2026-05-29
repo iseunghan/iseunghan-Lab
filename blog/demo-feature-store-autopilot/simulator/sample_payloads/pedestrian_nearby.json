@@ -1,0 +1,53 @@
+{
+  "vehicle_id": "vehicle-001",
+  "timestamp": "2026-05-21T14:15:00.000000",
+  "event_id": "vehicle-001-1716302100000",
+  "scenario": "pedestrian_nearby",
+  "sensor_data": {
+    "speed_kmh": 22.0,
+    "acceleration_mps2": -2.0,
+    "obstacle_distance_m": 5.5,
+    "lidar_points": 1100,
+    "gps": {
+      "latitude": 37.4419,
+      "longitude": -122.1430,
+      "accuracy_m": 2.0
+    },
+    "sensor_status": {
+      "lidar": "active",
+      "camera": "active",
+      "radar": "active",
+      "ultrasonic": "active"
+    },
+    "missing_sensors": []
+  },
+  "media_data": {
+    "camera_frames": {
+      "front": {
+        "objects_detected": 8,
+        "pedestrians": 3,
+        "vehicles": 2,
+        "lane_detected": true,
+        "lane_confidence": 0.82
+      },
+      "rear": {
+        "objects_detected": 3,
+        "pedestrians": 1,
+        "vehicles": 1,
+        "lane_detected": true,
+        "lane_confidence": 0.78
+      }
+    },
+    "audio": {
+      "noise_level_db": 55.0,
+      "siren_detected": false,
+      "horn_detected": false
+    }
+  },
+  "context": {
+    "location_type": "crosswalk",
+    "weather": "clear",
+    "time_of_day": "day",
+    "traffic_density": "medium"
+  }
+}
