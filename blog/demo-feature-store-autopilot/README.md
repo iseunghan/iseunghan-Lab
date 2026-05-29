@@ -1,5 +1,5 @@
 # Feature Store Demo: 자율주행 차량 위험도 예측 파이프라인 만들기
-![demo-main-page](image.png)
+![demo-main-page](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/demo-feature-store-autopilot/image.png)
 이 프로젝트는 자율주행 차량 이벤트를 예시로, Raw Data가 Feature Store를 거쳐 온라인 예측에 사용되는 흐름을 보여주는 데모입니다.
 
 MLOps Platform을 개발하면서 기존 데이터 파이프라인 위에서 feature를 어떤 방식으로 더 일관되게 관리할 수 있을지 PoC 관점에서 확인해 보려 합니다. 실제 서비스에서는 모델이 사용하는 feature를 누가 정의하고, 어디에 저장하며, 학습과 서빙에서 어떻게 같은 기준으로 재사용할지에 대한 부분들이 블랙박스이므로 이번 데모를 통해 배워보려 합니다.
@@ -284,7 +284,7 @@ SQLite 기반 registry/metadata store를 사용한 이유는 다음과 같습니
 ---
 
 # Feature 설계
-![feature-view-table](image-1.png)
+![feature-view-table](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/demo-feature-store-autopilot/image-1.png)
 Feature Store를 처음 설계할 때 가장 먼저 정해야 하는 것은 “무엇을 기준으로 feature를 조회할 것인가?”입니다.
 
 이 데모에서는 차량별 현재 위험도를 예측하므로 조회 기준은 자연스럽게 `vehicle_id`가 됩니다. 사용자가 `V001` 차량의 위험도를 요청하면, Feature Store는 `vehicle_id = V001`에 해당하는 최신 센서, 이미지, 오디오 feature를 가져와야 합니다.
@@ -479,7 +479,7 @@ FileSource(
 ---
 
 # Feature Engineering: Raw Data에서 Parquet으로
-![after-feature-build-retrieve-feature-view-table](image-2.png)
+![after-feature-build-retrieve-feature-view-table](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/demo-feature-store-autopilot/image-2.png)
 FeatureView는 feature의 정의입니다. 하지만 FeatureView를 정의했다고 feature 값이 자동으로 생기는 것은 아닙니다.
 
 실제 feature 값은 raw data를 읽고 계산해서 만들어야 합니다. 이 과정을 feature engineering이라고 볼 수 있습니다.
@@ -538,7 +538,7 @@ curl -X POST http://localhost:8000/api/features/build
 ---
 
 # Offline Store: 학습 데이터셋 생성
-![make-train-dataset-from-offline-store](image-3.png)
+![make-train-dataset-from-offline-store](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/demo-feature-store-autopilot/image-3.png)
 Feature Store를 쓰기 전에는 학습 데이터셋을 만드는 코드와 온라인 서빙 코드가 따로 존재하는 경우가 많습니다.
 
 예를 들어 학습 데이터셋은 batch SQL로 만들고, 온라인 추론에서는 backend service가 Redis나 DB에서 값을 직접 조합한다고 가정해볼 수 있습니다.
@@ -592,7 +592,7 @@ curl -X POST http://localhost:8000/api/features/training-dataset \
 ---
 
 # Materialization: Offline에서 Online으로
-![start-one-time-materialization](image-4.png)
+![start-one-time-materialization](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/demo-feature-store-autopilot/image-4.png)
 Online serving에서는 매 요청마다 MinIO의 Parquet 파일을 읽고 DuckDB로 조회하지 않습니다. 그렇게 하면 object storage 접근, Parquet scan, point-in-time lookup같은 과정 때문에 API latency를 예측하기 어렵기 때문에 실시간 서빙을 하기가 어렵습니다.
 
 대신 serving에 필요한 최신 feature 값을 Redis online store에 미리 적재해두고, FastAPI는 Redis에서 low-latency로 feature를 조회합니다. 이 적재 과정을 materialization이라고 부릅니다.
@@ -690,7 +690,7 @@ curl "http://localhost:8000/api/features/status?vehicle_id=V001"
 ---
 
 # Serving: Online Feature 조회와 위험도 예측
-![retrieve-online-feature](image-6.png)
+![retrieve-online-feature](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/demo-feature-store-autopilot/image-6.png)
 여기서 중요한 점은 serving 경로에서는 offline historical lookup을 하지 않는다는 것입니다. 학습 데이터셋을 만들 때는 여러 과거 시점의 feature가 필요하지만, online prediction에서는 현재 요청에 사용할 최신 feature만 필요합니다.
 
 | 구분 | 사용하는 Feast API | 목적 |
@@ -750,7 +750,7 @@ sequenceDiagram
 이 흐름에서 FastAPI가 하는 일은 단순히 Redis 값을 그대로 모델에 넘기는 것이 아닙니다. Feast 조회 결과에는 registry에 등록된 online feature들이 포함될 수 있고, 예측 API는 그중 risk scoring에 필요한 subset만 골라 안정적인 형태로 구성한 뒤 모델에 전달합니다.
 
 현재 risk scoring에 사용하는 feature는 다음과 같습니다.
-![risk-model-predict](image-5.png)
+![risk-model-predict](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/demo-feature-store-autopilot/image-5.png)
 | Feature | 의미 | 기본값 |
 | --- | --- | --- |
 | `avg_speed_10s` | 최근 10초 평균 속도 | `0.0` |
