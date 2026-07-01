@@ -1,6 +1,6 @@
 # Prometheus와 Grafana로 Ubuntu 서버 모니터링 환경 구성하기
 
-![image.png](Prometheus%EC%99%80%20Grafana%EB%A1%9C%20Ubuntu%20%EC%84%9C%EB%B2%84%20%EB%AA%A8%EB%8B%88%ED%84%B0%EB%A7%81%20%ED%99%98%EA%B2%BD%20%EA%B5%AC%EC%84%B1%ED%95%98%EA%B8%B0/image.png)
+![image.png](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/prometheus-grafana-ubuntu-monitoring/Prometheus%EC%99%80%20Grafana%EB%A1%9C%20Ubuntu%20%EC%84%9C%EB%B2%84%20%EB%AA%A8%EB%8B%88%ED%84%B0%EB%A7%81%20%ED%99%98%EA%B2%BD%20%EA%B5%AC%EC%84%B1%ED%95%98%EA%B8%B0/image.png?raw=true)
 
 # 개요
 
@@ -286,7 +286,7 @@ Dashboards → New → Import dashboard
 Dashboard ID: 1860 또는 12486
 ```
 
-![image.png](Prometheus%EC%99%80%20Grafana%EB%A1%9C%20Ubuntu%20%EC%84%9C%EB%B2%84%20%EB%AA%A8%EB%8B%88%ED%84%B0%EB%A7%81%20%ED%99%98%EA%B2%BD%20%EA%B5%AC%EC%84%B1%ED%95%98%EA%B8%B0/image%201.png)
+![image.png](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/prometheus-grafana-ubuntu-monitoring/Prometheus%EC%99%80%20Grafana%EB%A1%9C%20Ubuntu%20%EC%84%9C%EB%B2%84%20%EB%AA%A8%EB%8B%88%ED%84%B0%EB%A7%81%20%ED%99%98%EA%B2%BD%20%EA%B5%AC%EC%84%B1%ED%95%98%EA%B8%B0/image%201.png?raw=true)
 
 두 대시보드를 비교해본 결과, Host가 IP 기준으로 표시되는 점과 UI 구성이 더 마음에 들어 `12486`을 사용했습니다.
 
@@ -329,7 +329,7 @@ MS Teams → 원하는 Channel → Workflow 생성
 → Webhook URL 복사
 ```
 
-![823A08BD-E357-4946-8B65-F0EF63F8D997.png](Prometheus%EC%99%80%20Grafana%EB%A1%9C%20Ubuntu%20%EC%84%9C%EB%B2%84%20%EB%AA%A8%EB%8B%88%ED%84%B0%EB%A7%81%20%ED%99%98%EA%B2%BD%20%EA%B5%AC%EC%84%B1%ED%95%98%EA%B8%B0/823A08BD-E357-4946-8B65-F0EF63F8D997.png)
+![823A08BD-E357-4946-8B65-F0EF63F8D997.png](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/prometheus-grafana-ubuntu-monitoring/Prometheus%EC%99%80%20Grafana%EB%A1%9C%20Ubuntu%20%EC%84%9C%EB%B2%84%20%EB%AA%A8%EB%8B%88%ED%84%B0%EB%A7%81%20%ED%99%98%EA%B2%BD%20%EA%B5%AC%EC%84%B1%ED%95%98%EA%B8%B0/823A08BD-E357-4946-8B65-F0EF63F8D997.png?raw=true)
 
 Teams Workflow에서 발급받은 Webhook URL은 이후 Grafana Contact point 설정에 사용합니다.
 
@@ -568,7 +568,7 @@ Pending period: 0m 또는 1m
 
 저장 후 설정해둔 Teams로 알림이 정상적으로 오는지 확인합니다.
 
-![BEED0516-FBC9-4761-9A7B-B2676B894E0B.png](Prometheus%EC%99%80%20Grafana%EB%A1%9C%20Ubuntu%20%EC%84%9C%EB%B2%84%20%EB%AA%A8%EB%8B%88%ED%84%B0%EB%A7%81%20%ED%99%98%EA%B2%BD%20%EA%B5%AC%EC%84%B1%ED%95%98%EA%B8%B0/BEED0516-FBC9-4761-9A7B-B2676B894E0B.png)
+![BEED0516-FBC9-4761-9A7B-B2676B894E0B.png](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/prometheus-grafana-ubuntu-monitoring/Prometheus%EC%99%80%20Grafana%EB%A1%9C%20Ubuntu%20%EC%84%9C%EB%B2%84%20%EB%AA%A8%EB%8B%88%ED%84%B0%EB%A7%81%20%ED%99%98%EA%B2%BD%20%EA%B5%AC%EC%84%B1%ED%95%98%EA%B8%B0/BEED0516-FBC9-4761-9A7B-B2676B894E0B.png?raw=true)
 
 테스트가 끝나면 다시 원래 값으로 되돌립니다.
 
@@ -579,6 +579,6 @@ Pending period: 10m
 
 ## 마무리
 
-![image.png](Prometheus%EC%99%80%20Grafana%EB%A1%9C%20Ubuntu%20%EC%84%9C%EB%B2%84%20%EB%AA%A8%EB%8B%88%ED%84%B0%EB%A7%81%20%ED%99%98%EA%B2%BD%20%EA%B5%AC%EC%84%B1%ED%95%98%EA%B8%B0/image%202.png)
+![image.png](https://github.com/iseunghan/iseunghan-Lab/blob/main/blog/prometheus-grafana-ubuntu-monitoring/Prometheus%EC%99%80%20Grafana%EB%A1%9C%20Ubuntu%20%EC%84%9C%EB%B2%84%20%EB%AA%A8%EB%8B%88%ED%84%B0%EB%A7%81%20%ED%99%98%EA%B2%BD%20%EA%B5%AC%EC%84%B1%ED%95%98%EA%B8%B0/image%202.png?raw=true)
 
 그동안 구성해야지만 반복했던 귀차니즘을 이겨내고 이번 구성으로 여러 Ubuntu 서버의 기본 리소스 상태를 Prometheus와 Grafana를 통해 한곳에서 확인할 수 있게 되어 저 또는 팀원들의 불편함까지 해소할 수 있다는 사실에 정말 뿌듯합니다. 다음에는 서비스하는 애플리케이션까지 추가로 모니터링을 구성하여 장애로 이어지기전 사전에 탐지하여 방지할 수 있는 인프라를 구축하고 싶습니다.
