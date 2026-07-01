@@ -1,0 +1,10 @@
+apiVersion: 1
+contactPoints:
+    - orgId: 1
+      name: teams-infra
+      receivers:
+        - uid: ffqolozfwlm9sb
+          type: teams
+          settings:
+            url: {TEAMS_WEBHOOK_URL}
+          disableResolveMessage: false
