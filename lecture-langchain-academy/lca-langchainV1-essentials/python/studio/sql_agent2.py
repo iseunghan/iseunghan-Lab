@@ -10,7 +10,7 @@ from langchain_community.utilities import SQLDatabase
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
 
-llm = init_chat_model("openai:gpt-5")
+llm = init_chat_model("deepseek-v4-flash", temperature=0, model_provider="openai")
 
 # database is from:
 # url = "https://storage.googleapis.com/benchmarks-artifacts/chinook/Chinook.db"

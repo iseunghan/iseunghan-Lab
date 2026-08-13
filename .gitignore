@@ -746,4 +746,6 @@ $RECYCLE.BIN/
 ### Gradle Patch ###
 # Java heap dump
 
+.omc
+
 # End of https://www.toptal.com/developers/gitignore/api/jetbrains+all,visualstudiocode,macos,windows,python,java,gradle,maven,react,reactnative,swift,jupyternotebooks,virtualenv,pydev
